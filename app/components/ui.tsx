@@ -471,8 +471,53 @@ function RichNote({ event, onUpdate }: { event: UIEvent; onUpdate: (patch: Recor
   );
 }
 
+// ---------- Admin: manually confirm an off-platform payment (bank transfer) ----------
+function ManualAddForm({ onAdd }: { onAdd: (name: string, email: string) => Promise<string | null> }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    if (!name.trim()) {
+      setErr("Name is required");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    const e = await onAdd(name.trim(), email.trim());
+    setBusy(false);
+    if (e) setErr(e);
+    else {
+      setName("");
+      setEmail("");
+    }
+  };
+
+  const inp: React.CSSProperties = { flex: "1 1 140px", minWidth: 0, padding: "10px 12px", borderRadius: 10, border: "2px solid #99f6e4", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" };
+
+  return (
+    <div style={{ marginTop: 16, padding: 16, borderRadius: 14, background: "#f0fdfa", border: "1px solid #99f6e4" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>
+        Confirm a paid participant (bank transfer)
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} style={inp} />
+        <input placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} style={inp} />
+        <button onClick={submit} disabled={busy} style={{ padding: "10px 16px", borderRadius: 10, border: "none", background: busy ? "#94a3b8" : "linear-gradient(135deg, #06b6d4, #0d9488)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+          {busy ? "…" : "✓ Confirm payment"}
+        </button>
+      </div>
+      {err && <div style={{ color: "#ef4444", fontSize: 11, marginTop: 6 }}>{err}</div>}
+      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
+        Adds them to the list as paid. Enter an email to also send them a confirmation.
+      </div>
+    </div>
+  );
+}
+
 // ---------- Event card ----------
-export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete }: {
+export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd }: {
   event: UIEvent;
   isAdmin: boolean;
   onRegister?: (eventId: string, name: string, email: string) => Promise<string | null>;
@@ -480,6 +525,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   onUpdate?: (eventId: string, patch: Record<string, unknown>) => void;
   onSettle?: (eventId: string) => void;
   onDelete?: (eventId: string) => void;
+  onManualAdd?: (eventId: string, name: string, email: string) => Promise<string | null>;
 }) {
   const isSettled = event.status === "settled";
   const isFixed = event.paymentMode === "fixed";
@@ -561,6 +607,10 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
 
       {!isAdmin && !isSettled && onRegister && (
         <RegistrationForm event={event} onRegister={(name, email) => onRegister(event.id, name, email)} />
+      )}
+
+      {isAdmin && !isSettled && onManualAdd && (
+        <ManualAddForm onAdd={(name, email) => onManualAdd(event.id, name, email)} />
       )}
 
       {isAdmin && !isSettled && !isFixed && (
@@ -806,7 +856,7 @@ export function Header({ active, isAdmin, onLogout }: { active: "user" | "admin"
   return (
     <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "0 24px", position: "sticky", top: 0, zIndex: 50 }}>
       <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", height: 56 }}>
-        <a href="/" style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", textDecoration: "none" }}>SplitPlay</a>
+        <a href="/" style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", textDecoration: "none" }}>Bball Court Fee</a>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <a href="/" style={navLink(active === "user")}>Register</a>
           <a href="/admin" style={navLink(active === "admin")}>Admin</a>

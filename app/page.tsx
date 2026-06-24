@@ -69,7 +69,7 @@ export default function UserPage() {
         )}
       </div>
       <div style={{ textAlign: "center", padding: "32px 16px 24px", fontSize: 12, color: "#94a3b8" }}>
-        SplitPlay — payments secured by Stripe
+        Bball Court Fee — payments secured by Stripe
       </div>
     </div>
   );

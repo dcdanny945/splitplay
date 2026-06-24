@@ -105,6 +105,21 @@ export default function AdminPage() {
     }
   };
 
+  const onManualAdd = async (eventId: string, name: string, email: string): Promise<string | null> => {
+    const res = await fetch(`/api/events/${eventId}/manual`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      notify("success", `${name} added${data.listType === "waitlist" ? " (waitlist)" : ""}`);
+      loadEvents();
+      return null;
+    }
+    return data.error || "Failed to add";
+  };
+
   const onLogout = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
     setAuthed(false);
@@ -161,6 +176,7 @@ export default function AdminPage() {
           onUpdate={onUpdate}
           onSettle={onSettle}
           onDelete={onDelete}
+          onManualAdd={onManualAdd}
         />
       ))}
     </div>
