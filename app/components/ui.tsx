@@ -62,12 +62,39 @@ const KNOWN_DOMAINS = new Set([
   "bigpond.com", "optusnet.com.au", "internode.on.net",
 ]);
 
+// Edit distance — used to catch common domain typos (gmial.com -> gmail.com).
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return dp[m][n];
+}
+
+const COMMON_DOMAINS = ["gmail.com", "yahoo.com", "yahoo.com.au", "outlook.com", "hotmail.com", "icloud.com", "live.com", "bigpond.com", "proton.me", "protonmail.com"];
+
+function suggestDomain(domain: string): string | null {
+  for (const d of COMMON_DOMAINS) {
+    const dist = levenshtein(domain, d);
+    if (dist > 0 && dist <= 2) return d;
+  }
+  return null;
+}
+
 function isValidEmail(email: string): { valid: boolean; reason: string } {
   const basic = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
   if (!basic) return { valid: false, reason: "Invalid email format" };
   const domain = email.split("@")[1].toLowerCase();
   if (KNOWN_DOMAINS.has(domain)) return { valid: true, reason: "" };
-  return { valid: false, reason: "Please use a recognized email provider (e.g. Gmail, Outlook, Yahoo)" };
+  const suggestion = suggestDomain(domain);
+  if (suggestion) return { valid: false, reason: `Did you mean @${suggestion}? Please check your email is spelled correctly.` };
+  return { valid: false, reason: "Please use a real email (e.g. Gmail, Outlook, Yahoo) — your confirmation is sent there." };
 }
 
 // ---------- Notification ----------
@@ -191,9 +218,11 @@ function ParticipantList({ participants, label, color, onRemove, isAdmin, isSett
           <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: i % 2 === 0 ? "#f8fafc" : "#fff", borderRadius: 10, marginBottom: 4, fontSize: 14, border: "1px solid transparent" }}>
             <div style={{ minWidth: 0, overflow: "hidden", display: "flex", alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ fontWeight: 600, color: "#1e293b" }}>{i + 1}. {p.name}</span>
-              {p.paid && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#065f46", background: "#d1fae5", padding: "2px 8px", borderRadius: 99 }}>PAID</span>}
-              {isAdmin && p.chargeStatus === "failed" && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#991b1b", background: "#fee2e2", padding: "2px 8px", borderRadius: 99 }}>FAILED</span>}
-              {isAdmin && p.chargeStatus === "pending" && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#92400e", background: "#fef3c7", padding: "2px 8px", borderRadius: 99 }}>PENDING</span>}
+              {p.paid ? (
+                <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#065f46", background: "#d1fae5", padding: "2px 8px", borderRadius: 99 }}>Confirmed</span>
+              ) : (
+                <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#b91c1c", background: "#fee2e2", padding: "2px 8px", borderRadius: 99 }}>Unconfirmed</span>
+              )}
               {isAdmin && p.email && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>{p.email}</span>}
             </div>
             {canRemove && (
@@ -265,7 +294,13 @@ function RegistrationForm({ event, onRegister }: { event: UIEvent; onRegister: (
             onChange={(e) => setEmail(e.target.value)}
             onBlur={() => { setTouched({ ...touched, email: true }); setErrors(validate()); }}
             style={{ ...inputBase, border: `2px solid ${touched.email && errors.email ? "#ef4444" : "#e2e8f0"}` }} />
-          {touched.email && errors.email && <div style={errStyle}>{errors.email}</div>}
+          {touched.email && errors.email ? (
+            <div style={errStyle}>{errors.email}</div>
+          ) : (
+            <div style={{ fontSize: 11, color: "#0e7490", marginTop: 4 }}>
+              📧 Your confirmation email is sent here — please double-check it&apos;s correct.
+            </div>
+          )}
         </div>
 
         <button onClick={handleSubmit} disabled={submitting}
@@ -558,12 +593,16 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-          <div style={{ padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700, background: isSettled ? "#fef3c7" : "#d1fae5", color: isSettled ? "#92400e" : "#065f46" }}>
-            {isSettled ? "Settled" : "Open"}
-          </div>
-          <div style={{ padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: isFixed ? "#ede9fe" : "#cffafe", color: isFixed ? "#6d28d9" : "#0e7490" }}>
-            {isFixed ? "Pay at registration" : "Auto-charge at settlement"}
-          </div>
+          {isAdmin && (
+            <div style={{ padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700, background: isSettled ? "#fef3c7" : "#d1fae5", color: isSettled ? "#92400e" : "#065f46" }}>
+              {isSettled ? "Settled" : "Open"}
+            </div>
+          )}
+          {isAdmin && (
+            <div style={{ padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: isFixed ? "#ede9fe" : "#cffafe", color: isFixed ? "#6d28d9" : "#0e7490" }}>
+              {isFixed ? "Pay at registration" : "Auto-charge at settlement"}
+            </div>
+          )}
           {isAdmin && !isSettled && (
             <button
               onClick={() => update({ visible: !event.visible })}
