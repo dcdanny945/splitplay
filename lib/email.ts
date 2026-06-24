@@ -1,8 +1,19 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import type { PaymentMode } from "./pricing";
 
-// Lazily constructed so the app still runs before RESEND_API_KEY is set.
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// Sends confirmation emails through Gmail (SMTP) using an App Password, so it can
+// email any recipient. Set GMAIL_USER + GMAIL_APP_PASSWORD in the environment.
+// App passwords are 16 chars; spaces (if any) are stripped automatically.
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
+
+const transporter =
+  GMAIL_USER && GMAIL_APP_PASSWORD
+    ? nodemailer.createTransport({
+        service: "gmail",
+        auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+      })
+    : null;
 
 export type ConfirmationEmail = {
   to: string;
@@ -15,15 +26,15 @@ export type ConfirmationEmail = {
 };
 
 /**
- * Sends the "payment successful" confirmation. No-ops (with a warning) if
- * RESEND_API_KEY is not configured, so the payment flow never fails on email.
+ * Sends the "payment successful" confirmation. No-ops (with a warning) if Gmail
+ * credentials are not configured, so the payment flow never fails on email.
  */
 export async function sendConfirmationEmail(opts: ConfirmationEmail): Promise<boolean> {
-  if (!resend) {
-    console.warn(`[email] RESEND_API_KEY not set — skipping confirmation to ${opts.to}`);
+  if (!transporter) {
+    console.warn(`[email] GMAIL_USER/GMAIL_APP_PASSWORD not set — skipping confirmation to ${opts.to}`);
     return false;
   }
-  const from = process.env.EMAIL_FROM || "SplitPlay <onboarding@resend.dev>";
+  const from = process.env.EMAIL_FROM || `SplitPlay <${GMAIL_USER}>`;
   const amount = `$${opts.amount.toFixed(2)} AUD`;
   const when = opts.mode === "fixed" ? "Your payment is complete." : "Settlement is done and your card has been charged.";
 
@@ -46,16 +57,12 @@ export async function sendConfirmationEmail(opts: ConfirmationEmail): Promise<bo
   </div>`;
 
   try {
-    const { error } = await resend.emails.send({
+    await transporter.sendMail({
       from,
       to: opts.to,
       subject: `Payment confirmed — ${opts.eventName}`,
       html,
     });
-    if (error) {
-      console.error("[email] Resend error:", error);
-      return false;
-    }
     return true;
   } catch (err) {
     console.error("[email] send failed:", err);
