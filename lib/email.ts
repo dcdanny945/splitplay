@@ -34,13 +34,13 @@ export async function sendConfirmationEmail(opts: ConfirmationEmail): Promise<bo
     console.warn(`[email] GMAIL_USER/GMAIL_APP_PASSWORD not set — skipping confirmation to ${opts.to}`);
     return false;
   }
-  const from = process.env.EMAIL_FROM || `SplitPlay <${GMAIL_USER}>`;
+  const from = process.env.EMAIL_FROM || `Bball Court Fee <${GMAIL_USER}>`;
   const amount = `$${opts.amount.toFixed(2)} AUD`;
   const when = opts.mode === "fixed" ? "Your payment is complete." : "Settlement is done and your card has been charged.";
 
   const html = `
   <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
-    <div style="font-size:20px;font-weight:800;color:#0d9488">SplitPlay</div>
+    <div style="font-size:20px;font-weight:800;color:#0d9488">Bball Court Fee</div>
     <h1 style="font-size:18px;margin:16px 0 4px">Payment confirmed ✅</h1>
     <p style="color:#475569;font-size:14px;margin:0 0 20px">Hi ${escapeHtml(opts.name)}, ${when}</p>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
