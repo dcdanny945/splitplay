@@ -46,3 +46,29 @@ export async function isAdmin(): Promise<boolean> {
 }
 
 export const COOKIE_MAX_AGE = MAX_AGE_SECONDS;
+
+// ---- Per-registration withdrawal tokens (for self-service withdraw links) ----
+// A token is "<participantId>.<hmac>" — unforgeable without the secret, so it's
+// safe to email even though participant ids may be visible elsewhere.
+export function makeWithdrawToken(participantId: string): string {
+  const sig = createHmac("sha256", secret()).update("withdraw:" + participantId).digest("hex");
+  return `${participantId}.${sig}`;
+}
+
+export function verifyWithdrawToken(token?: string | null): string | null {
+  if (!token) return null;
+  const idx = token.lastIndexOf(".");
+  if (idx <= 0) return null;
+  const id = token.slice(0, idx);
+  const sig = token.slice(idx + 1);
+  const expected = createHmac("sha256", secret()).update("withdraw:" + id).digest("hex");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return null;
+  try {
+    if (!timingSafeEqual(a, b)) return null;
+  } catch {
+    return null;
+  }
+  return id;
+}

@@ -705,7 +705,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
 export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<string, unknown>) => void }) {
   const [form, setForm] = useState({
     name: "", eventDate: "", timeLabel: "", location: "", description: "", totalCost: 60, maxParticipants: 12,
-    settlementDay: "thursday", settlementHour: "00", settlementMinute: "00",
+    settlementDay: "thursday", settlementHour: "20", settlementMinute: "00",
     paymentMode: "split",
   });
   const update = (k: string, v: string | number) => setForm({ ...form, [k]: v });

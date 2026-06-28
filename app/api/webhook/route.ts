@@ -2,7 +2,9 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getConfirmedCount, getNextPosition, chargeFixedPending, type EventRow } from "@/lib/db";
-import { sendConfirmationEmail } from "@/lib/email";
+import { sendConfirmationEmail, sendRegistrationEmail } from "@/lib/email";
+import { makeWithdrawToken } from "@/lib/auth";
+import { melbourneLabel } from "@/lib/time";
 
 // Stripe needs the raw request body to verify the signature, so we read text().
 export async function POST(req: Request) {
@@ -64,20 +66,40 @@ async function handleSessionCompleted(session: Stripe.Checkout.Session) {
     const listType = confirmedCount < ev.max_participants ? "confirmed" : "waitlist";
     const position = await getNextPosition(eventId, listType);
 
-    await supabaseAdmin.from("participants").insert({
-      event_id: eventId,
-      name: md.name,
-      email: md.email,
-      stripe_customer_id: customerId,
-      stripe_payment_method_id: pm,
-      list_type: listType,
-      position,
-      charge_status: "pending",
-    });
+    const { data: inserted } = await supabaseAdmin
+      .from("participants")
+      .insert({
+        event_id: eventId,
+        name: md.name,
+        email: md.email,
+        stripe_customer_id: customerId,
+        stripe_payment_method_id: pm,
+        list_type: listType,
+        position,
+        charge_status: "pending",
+      })
+      .select()
+      .single();
 
-    // Fixed mode + landed in a confirmed slot -> charge immediately.
     if (ev.payment_mode === "fixed" && listType === "confirmed") {
+      // Fixed mode + landed in a confirmed slot -> charge immediately.
       await chargeFixedPending(eventId);
+    } else if (ev.payment_mode === "split" && inserted && md.email) {
+      // Split mode: confirm registration + send a personal withdraw link.
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "";
+      const withdrawUrl = `${baseUrl}/withdraw?token=${makeWithdrawToken(inserted.id)}`;
+      const settlementLabel = ev.settlement_time
+        ? `${melbourneLabel(ev.settlement_time)} (Melbourne)`
+        : "settlement time";
+      await sendRegistrationEmail({
+        to: md.email,
+        name: md.name || "there",
+        eventName: ev.name,
+        date: ev.event_date,
+        location: ev.location,
+        settlementLabel,
+        withdrawUrl,
+      });
     }
   } else if (session.mode === "payment") {
     // Pay-now (fixed mode). Already charged by Checkout.

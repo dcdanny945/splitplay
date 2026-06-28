@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { serializeEvent, promoteWaitlist, type EventRow, type ParticipantRow } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { sanitizeNote } from "@/lib/sanitize";
+import { nextThursday8pmMelbourne } from "@/lib/time";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -48,6 +49,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  // Switching to split without a settlement time -> default to next Thursday 8pm Melbourne.
+  if (patch.payment_mode === "split" && patch.settlement_time === undefined) {
+    const { data: cur } = await supabaseAdmin.from("events").select("settlement_time").eq("id", id).single();
+    if (!cur?.settlement_time) {
+      patch.settlement_time = nextThursday8pmMelbourne().toISOString();
+    }
   }
 
   const { data, error } = await supabaseAdmin.from("events").update(patch).eq("id", id).select().single();
