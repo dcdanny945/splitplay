@@ -27,6 +27,7 @@ export type UIEvent = {
   cutoffTime: string | null;
   status: "open" | "settled" | "cancelled";
   visible: boolean;
+  maxWaitlist: number;
   participants: UIParticipant[];
   waitlist: UIParticipant[];
 };
@@ -275,6 +276,20 @@ function RegistrationForm({ event, onRegister }: { event: UIEvent; onRegister: (
   const isFull = event.participants.length >= event.maxParticipants;
   const isFixed = event.paymentMode === "fixed";
   const payNowAmount = priceStrings(event.totalCost, event.maxParticipants).charge;
+  // Split mode caps the waitlist; once both are full, registration is closed.
+  const waitlistFull = !isFixed && event.waitlist.length >= event.maxWaitlist;
+  const fullyFull = isFull && waitlistFull;
+
+  if (fullyFull) {
+    return (
+      <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #e2e8f0", marginTop: 16, textAlign: "center" }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#991b1b" }}>Event full</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+          The spots and the waitlist are both full. Check back later in case someone withdraws.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #e2e8f0", marginTop: 16 }}>
@@ -335,6 +350,29 @@ function MaxParticipantsEditor({ event, onUpdate }: { event: UIEvent; onUpdate: 
   return (
     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
       <input type="number" value={val} min={1} max={500} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} style={miniInput} autoFocus />
+      <button onClick={save} style={saveBtn}>Save</button>
+      <button onClick={() => setEditing(false)} style={cancelBtn}>Cancel</button>
+    </div>
+  );
+}
+
+function WaitlistEditor({ event, onUpdate }: { event: UIEvent; onUpdate: (patch: Record<string, unknown>) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState<number | string>(event.maxWaitlist);
+  const save = () => {
+    onUpdate({ max_waitlist: Math.max(0, Math.min(100, Number(val) || 0)) });
+    setEditing(false);
+  };
+  if (!editing) {
+    return (
+      <button onClick={() => { setVal(event.maxWaitlist); setEditing(true); }} style={dashBtn}>
+        Waitlist: {event.maxWaitlist} (edit)
+      </button>
+    );
+  }
+  return (
+    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+      <input type="number" value={val} min={0} max={100} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} style={miniInput} autoFocus />
       <button onClick={save} style={saveBtn}>Save</button>
       <button onClick={() => setEditing(false)} style={cancelBtn}>Cancel</button>
     </div>
@@ -688,6 +726,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
           {isAdmin && !isSettled && <PaymentModeToggle event={event} onUpdate={update} />}
           {isAdmin && !isSettled && <MaxParticipantsEditor event={event} onUpdate={update} />}
           {isAdmin && !isSettled && <TotalCostEditor event={event} onUpdate={update} />}
+          {isAdmin && !isSettled && !isFixed && <WaitlistEditor event={event} onUpdate={update} />}
           {isAdmin && !isSettled && (
             <button onClick={() => setEditingDetails((v) => !v)} style={dashBtn}>
               {editingDetails ? "Close details" : "✏️ Edit details"}
@@ -779,7 +818,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
 // ---------- Create event form (admin) ----------
 export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<string, unknown>) => void }) {
   const [form, setForm] = useState({
-    name: "", eventDate: "", timeLabel: "", location: "", description: "", totalCost: 60, maxParticipants: 12,
+    name: "", eventDate: "", timeLabel: "", location: "", description: "", totalCost: 60, maxParticipants: 12, maxWaitlist: 2,
     settlementDay: "thursday", settlementHour: "20", settlementMinute: "00",
     paymentMode: "split",
   });
@@ -803,6 +842,7 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
       description: form.description || null,
       total_cost: Number(form.totalCost),
       max_participants: Number(form.maxParticipants),
+      max_waitlist: form.paymentMode === "split" ? Number(form.maxWaitlist) : undefined,
       payment_mode: form.paymentMode,
       settlement_day: form.paymentMode === "split" ? form.settlementDay : undefined,
       settlement_hour: form.paymentMode === "split" ? Number(form.settlementHour) : undefined,
@@ -851,6 +891,13 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
             <input style={iStyle} type="number" value={form.maxParticipants} onChange={(e) => update("maxParticipants", e.target.value)} />
           </div>
         </div>
+        {form.paymentMode === "split" && (
+          <div>
+            <label style={labelStyle}>Waitlist size</label>
+            <input style={iStyle} type="number" value={form.maxWaitlist} onChange={(e) => update("maxWaitlist", e.target.value)} />
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Max people on the waitlist. They fill spots if someone withdraws or a charge fails.</div>
+          </div>
+        )}
 
         <div>
           <label style={labelStyle}>Payment Mode</label>

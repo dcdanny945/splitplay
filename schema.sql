@@ -16,6 +16,8 @@ create table if not exists events (
   description text,
   total_cost numeric(10,2) not null default 60.00,
   max_participants int not null default 12,
+  -- max people allowed on the waitlist (split mode); they backfill failed/withdrawn spots
+  max_waitlist int not null default 2,
   -- 'split' = save card, auto-charge each person at settlement
   -- 'fixed' = pay immediately at registration (total / max spots)
   payment_mode text not null default 'split'

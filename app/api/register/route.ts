@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase";
-import { getConfirmedCount, type EventRow } from "@/lib/db";
+import { getConfirmedCount, getWaitlistCount, type EventRow } from "@/lib/db";
 import { calcCharge } from "@/lib/pricing";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -27,7 +27,15 @@ export async function POST(req: Request) {
 
   const confirmedCount = await getConfirmedCount(eventId);
   const isFull = confirmedCount >= ev.max_participants;
-  const listType = isFull ? "waitlist" : "confirmed";
+  const listType: "confirmed" | "waitlist" = isFull ? "waitlist" : "confirmed";
+
+  // Split mode caps the waitlist; fixed mode keeps its existing (uncapped) behavior.
+  if (isFull && ev.payment_mode === "split") {
+    const waitlistCount = await getWaitlistCount(eventId);
+    if (waitlistCount >= ev.max_waitlist) {
+      return NextResponse.json({ error: "This event is full — the waitlist is also full." }, { status: 400 });
+    }
+  }
 
   const baseUrl = process.env.NEXT_PUBLIC_URL || new URL(req.url).origin;
   const cleanName = String(name).trim();

@@ -2,7 +2,7 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getConfirmedCount, getNextPosition, chargeFixedPending, type EventRow } from "@/lib/db";
-import { sendConfirmationEmail, sendRegistrationEmail } from "@/lib/email";
+import { sendConfirmationEmail, sendRegistrationEmail, sendWaitlistEmail } from "@/lib/email";
 import { makeWithdrawToken } from "@/lib/auth";
 import { melbourneLabel } from "@/lib/time";
 
@@ -85,21 +85,32 @@ async function handleSessionCompleted(session: Stripe.Checkout.Session) {
       // Fixed mode + landed in a confirmed slot -> charge immediately.
       await chargeFixedPending(eventId);
     } else if (ev.payment_mode === "split" && inserted && md.email) {
-      // Split mode: confirm registration + send a personal withdraw link.
+      // Split mode: personal withdraw link in every email.
       const baseUrl = process.env.NEXT_PUBLIC_URL || "";
       const withdrawUrl = `${baseUrl}/withdraw?token=${makeWithdrawToken(inserted.id)}`;
-      const settlementLabel = ev.settlement_time
-        ? `${melbourneLabel(ev.settlement_time)} (Melbourne)`
-        : "settlement time";
-      await sendRegistrationEmail({
-        to: md.email,
-        name: md.name || "there",
-        eventName: ev.name,
-        date: ev.event_date,
-        location: ev.location,
-        settlementLabel,
-        withdrawUrl,
-      });
+      if (listType === "confirmed") {
+        const settlementLabel = ev.settlement_time
+          ? `${melbourneLabel(ev.settlement_time)} (Melbourne)`
+          : "settlement time";
+        await sendRegistrationEmail({
+          to: md.email,
+          name: md.name || "there",
+          eventName: ev.name,
+          date: ev.event_date,
+          location: ev.location,
+          settlementLabel,
+          withdrawUrl,
+        });
+      } else {
+        await sendWaitlistEmail({
+          to: md.email,
+          name: md.name || "there",
+          eventName: ev.name,
+          date: ev.event_date,
+          location: ev.location,
+          withdrawUrl,
+        });
+      }
     }
   } else if (session.mode === "payment") {
     // Pay-now (fixed mode). Already charged by Checkout.

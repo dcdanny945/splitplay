@@ -48,6 +48,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
     }
   }
 
+  if (body.max_waitlist !== undefined) {
+    patch.max_waitlist = Math.max(0, Math.min(100, Number(body.max_waitlist) || 0));
+  }
+
   let raisedMax = false;
   if (body.max_participants !== undefined) {
     patch.max_participants = Math.max(1, Math.min(500, Number(body.max_participants) || 1));

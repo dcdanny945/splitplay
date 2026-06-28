@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { name, event_date, time_label, location, description, total_cost, max_participants, payment_mode, settlement_time, settlement_day, settlement_hour, settlement_minute } = body;
+  const { name, event_date, time_label, location, description, total_cost, max_participants, max_waitlist, payment_mode, settlement_time, settlement_day, settlement_hour, settlement_minute } = body;
 
   if (!name || typeof name !== "string") {
     return NextResponse.json({ error: "Event name is required" }, { status: 400 });
@@ -70,6 +70,7 @@ export async function POST(req: Request) {
       description: sanitizeNote(description),
       total_cost: Math.max(0, Number(total_cost) || 0),
       max_participants: Math.max(1, Math.min(500, Number(max_participants) || 1)),
+      max_waitlist: Math.max(0, Math.min(100, Number(max_waitlist) || 2)),
       payment_mode: mode,
       settlement_time: settlementTime,
       status: "open",

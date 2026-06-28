@@ -1,7 +1,9 @@
 import { supabaseAdmin } from "./supabase";
 import { stripe } from "./stripe";
 import { calcCharge, type PaymentMode } from "./pricing";
-import { sendConfirmationEmail } from "./email";
+import { sendConfirmationEmail, sendFailedChargeEmail, sendRegistrationEmail } from "./email";
+import { makeWithdrawToken } from "./auth";
+import { melbourneLabel } from "./time";
 
 // ---------- Row types ----------
 export type EventRow = {
@@ -13,6 +15,7 @@ export type EventRow = {
   description: string | null;
   total_cost: number | string;
   max_participants: number;
+  max_waitlist: number;
   payment_mode: PaymentMode;
   settlement_time: string | null;
   status: "open" | "settled" | "cancelled";
@@ -57,6 +60,57 @@ export async function getNextPosition(eventId: string, listType: "confirmed" | "
   return (data?.[0]?.position ?? 0) + 1;
 }
 
+export async function getWaitlistCount(eventId: string): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from("participants")
+    .select("*", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("list_type", "waitlist");
+  return count ?? 0;
+}
+
+/** The waitlister who would be promoted next (lowest position). */
+export async function getNextWaitlistId(eventId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("participants")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("list_type", "waitlist")
+    .order("position", { ascending: true })
+    .limit(1);
+  return data?.[0]?.id ?? null;
+}
+
+/**
+ * After a confirmed participant is removed, the DB trigger promotes the first
+ * waitlister. For SPLIT events, email that person to confirm they've moved up.
+ * Pass the id captured (via getNextWaitlistId) BEFORE the delete.
+ */
+export async function notifyPromotedWaitlister(eventId: string, candidateId: string | null): Promise<void> {
+  if (!candidateId) return;
+  const { data: p } = await supabaseAdmin.from("participants").select("*").eq("id", candidateId).single();
+  const part = p as ParticipantRow | null;
+  if (!part || part.list_type !== "confirmed") return; // wasn't promoted
+
+  const { data: ev } = await supabaseAdmin.from("events").select("*").eq("id", eventId).single();
+  const event = ev as EventRow | null;
+  if (!event || event.payment_mode !== "split") return;
+
+  const baseUrl = process.env.NEXT_PUBLIC_URL || "";
+  const withdrawUrl = `${baseUrl}/withdraw?token=${makeWithdrawToken(part.id)}`;
+  const settlementLabel = event.settlement_time ? `${melbourneLabel(event.settlement_time)} (Melbourne)` : "settlement time";
+  await sendRegistrationEmail({
+    to: part.email,
+    name: part.name,
+    eventName: event.name,
+    date: event.event_date,
+    location: event.location,
+    settlementLabel,
+    withdrawUrl,
+    promoted: true,
+  });
+}
+
 // ---------- Serialization for the frontend ----------
 function serializeParticipant(p: ParticipantRow, admin: boolean) {
   return {
@@ -87,6 +141,7 @@ export function serializeEvent(event: EventRow, participants: ParticipantRow[], 
     description: event.description,
     totalCost: Number(event.total_cost),
     maxParticipants: event.max_participants,
+    maxWaitlist: event.max_waitlist,
     paymentMode: event.payment_mode,
     cutoffTime: event.settlement_time,
     status: event.status,
@@ -102,7 +157,8 @@ async function chargeParticipant(
   p: ParticipantRow,
   chargeCents: number,
   charge: number,
-  mode: PaymentMode
+  mode: PaymentMode,
+  splitCount?: number
 ): Promise<"charged" | "failed"> {
   if (!p.stripe_customer_id || !p.stripe_payment_method_id) {
     // No saved card -> can't charge off-session. Leave for admin follow-up.
@@ -132,6 +188,7 @@ async function chargeParticipant(
       date: event.event_date,
       location: event.location,
       mode,
+      splitCount,
     });
     if (sent) {
       await supabaseAdmin.from("participants").update({ email_sent: true }).eq("id", p.id);
@@ -145,31 +202,67 @@ async function chargeParticipant(
 }
 
 /**
- * Settle a SPLIT event: charge every confirmed participant their share, then
- * mark the event settled. Idempotent-ish — already-charged people are skipped.
+ * Settle a SPLIT event.
+ *  - Per-person amount = total / (confirmed headcount at settlement).
+ *  - Charge confirmed in order; on a failed charge, email the person, then pull
+ *    the next waitlister in to take the spot (charged the same amount).
+ *  - Keep going until each slot is filled with a successful charge or the
+ *    waitlist runs out, then mark the event settled.
  */
 export async function settleEvent(event: EventRow): Promise<{ charged: number; failed: number }> {
-  const { data } = await supabaseAdmin
+  const { data: confData } = await supabaseAdmin
     .from("participants")
     .select("*")
     .eq("event_id", event.id)
     .eq("list_type", "confirmed")
     .order("position", { ascending: true });
-  const confirmed = (data ?? []) as ParticipantRow[];
+  const confirmed = (confData ?? []) as ParticipantRow[];
+
+  const { data: waitData } = await supabaseAdmin
+    .from("participants")
+    .select("*")
+    .eq("event_id", event.id)
+    .eq("list_type", "waitlist")
+    .eq("charge_status", "pending")
+    .order("position", { ascending: true });
+  const waitlistQueue = (waitData ?? []) as ParticipantRow[];
 
   let charged = 0;
   let failed = 0;
 
-  if (confirmed.length > 0) {
-    const { chargeCents, charge } = calcCharge(Number(event.total_cost), confirmed.length);
+  const divisor = confirmed.length; // headcount at settlement -> total / divisor
+  if (divisor > 0) {
+    const { chargeCents, charge } = calcCharge(Number(event.total_cost), divisor);
+
+    const notifyFailed = async (p: ParticipantRow) => {
+      failed++;
+      await sendFailedChargeEmail({ to: p.email, name: p.name, eventName: event.name, date: event.event_date });
+    };
+
     for (const p of confirmed) {
       if (p.charge_status === "charged") {
+        charged++; // manually-confirmed participant
+        continue;
+      }
+      const result = await chargeParticipant(event, p, chargeCents, charge, "split", divisor);
+      if (result === "charged") {
         charged++;
         continue;
       }
-      const result = await chargeParticipant(event, p, chargeCents, charge, "split");
-      if (result === "charged") charged++;
-      else failed++;
+      // Failed -> notify, then backfill this slot from the waitlist.
+      await notifyFailed(p);
+      let filled = false;
+      while (!filled && waitlistQueue.length > 0) {
+        const w = waitlistQueue.shift()!;
+        await supabaseAdmin.from("participants").update({ list_type: "confirmed" }).eq("id", w.id);
+        const r2 = await chargeParticipant(event, w, chargeCents, charge, "split", divisor);
+        if (r2 === "charged") {
+          charged++;
+          filled = true;
+        } else {
+          await notifyFailed(w);
+        }
+      }
     }
   }
 

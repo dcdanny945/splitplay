@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { chargeFixedPending } from "@/lib/db";
+import { chargeFixedPending, getNextWaitlistId, notifyPromotedWaitlister } from "@/lib/db";
 import { isAdmin, verifyWithdrawToken } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
 import { melbourneLabel } from "@/lib/time";
@@ -57,11 +57,16 @@ export async function POST(req: Request) {
       }
     }
 
+    const candidate = p.event_id ? await getNextWaitlistId(p.event_id) : null;
     const { error } = await supabaseAdmin.from("participants").delete().eq("id", pid);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // DB trigger promotes the next waitlister; charge promoted fixed-mode people.
-    if (p.event_id) await chargeFixedPending(p.event_id);
+    // DB trigger promotes the next waitlister; charge promoted fixed-mode people,
+    // and email promoted split-mode people that they've moved up.
+    if (p.event_id) {
+      await chargeFixedPending(p.event_id);
+      await notifyPromotedWaitlister(p.event_id, candidate);
+    }
 
     return NextResponse.json({ ok: true, eventName: ev?.name ?? "" });
   }
@@ -74,9 +79,13 @@ export async function POST(req: Request) {
   const { data: p } = await supabaseAdmin.from("participants").select("event_id").eq("id", participantId).single();
   const eventId = p?.event_id as string | undefined;
 
+  const candidate = eventId ? await getNextWaitlistId(eventId) : null;
   const { error } = await supabaseAdmin.from("participants").delete().eq("id", participantId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (eventId) await chargeFixedPending(eventId);
+  if (eventId) {
+    await chargeFixedPending(eventId);
+    await notifyPromotedWaitlister(eventId, candidate);
+  }
   return NextResponse.json({ ok: true });
 }
