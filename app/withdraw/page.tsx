@@ -13,6 +13,11 @@ type Info = {
   error?: string;
 };
 
+function fmtDate(d: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
+}
+
 const backBtn: React.CSSProperties = {
   display: "inline-block",
   marginTop: 20,
@@ -89,7 +94,7 @@ export default function WithdrawPage() {
               <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>Withdraw from this event?</div>
               <div style={{ marginTop: 16, padding: 16, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14 }}>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{info.eventName}</div>
-                {info.eventDate && <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>Date: {info.eventDate}</div>}
+                {info.eventDate && <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>Date: {fmtDate(info.eventDate)}</div>}
                 <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>Registered as: {info.name}</div>
                 {info.settlementLabel && <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>Charge time: {info.settlementLabel}</div>}
               </div>

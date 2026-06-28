@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { EventCard, Notification, Header, type UIEvent, type NotificationState } from "@/app/components/ui";
 
+// Hide an event from registrants once its date has passed (Melbourne time).
+function isEventOver(date: string | null): boolean {
+  if (!date) return false;
+  const todayMel = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Australia/Melbourne",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  return date < todayMel; // YYYY-MM-DD string comparison
+}
+
 export default function UserPage() {
   const [events, setEvents] = useState<UIEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,8 +24,9 @@ export default function UserPage() {
     try {
       const res = await fetch("/api/events", { cache: "no-store" });
       const data = await res.json();
-      // Always respect visibility here, even if an admin is logged in this browser.
-      setEvents((data.events || []).filter((e: UIEvent) => e.status === "open" && e.visible));
+      // Always respect visibility (even if an admin is logged in this browser),
+      // and drop events whose date has already passed.
+      setEvents((data.events || []).filter((e: UIEvent) => e.visible && !isEventOver(e.date)));
     } catch {
       setNotification({ type: "error", message: "Could not load events" });
     } finally {

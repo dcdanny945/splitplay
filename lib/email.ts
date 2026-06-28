@@ -47,7 +47,7 @@ export async function sendConfirmationEmail(opts: ConfirmationEmail): Promise<bo
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
       <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Event</div>
       <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
-      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(opts.date)}</div>` : ""}
+      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(fmtDate(opts.date))}</div>` : ""}
       ${opts.location ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Location: ${escapeHtml(opts.location)}</div>` : ""}
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:13px;color:#64748b">Amount charged</span>
@@ -105,7 +105,7 @@ export async function sendRegistrationEmail(opts: RegistrationEmail): Promise<bo
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
       <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Event</div>
       <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
-      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(opts.date)}</div>` : ""}
+      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(fmtDate(opts.date))}</div>` : ""}
       ${opts.location ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Location: ${escapeHtml(opts.location)}</div>` : ""}
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0">
         <div style="font-size:13px;color:#64748b">You'll be charged your share at:</div>
@@ -159,7 +159,7 @@ export async function sendWaitlistEmail(opts: WaitlistEmail): Promise<boolean> {
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
       <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Event</div>
       <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
-      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(opts.date)}</div>` : ""}
+      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(fmtDate(opts.date))}</div>` : ""}
       ${opts.location ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Location: ${escapeHtml(opts.location)}</div>` : ""}
     </div>
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;margin-top:16px">
@@ -198,7 +198,7 @@ export async function sendFailedChargeEmail(opts: FailedChargeEmail): Promise<bo
   <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
     <div style="font-size:20px;font-weight:800;color:#0d9488">Bball Court Fee</div>
     <h1 style="font-size:18px;margin:16px 0 4px">Payment couldn't be processed ⚠️</h1>
-    <p style="color:#475569;font-size:14px;margin:0 0 16px">Hi ${escapeHtml(opts.name)}, we tried to charge your card for <b>${escapeHtml(opts.eventName)}</b>${opts.date ? ` (${escapeHtml(opts.date)})` : ""} but it didn't go through — most likely insufficient balance.</p>
+    <p style="color:#475569;font-size:14px;margin:0 0 16px">Hi ${escapeHtml(opts.name)}, we tried to charge your card for <b>${escapeHtml(opts.eventName)}</b>${opts.date ? ` (${escapeHtml(fmtDate(opts.date))})` : ""} but it didn't go through — most likely insufficient balance.</p>
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:16px">
       <p style="color:#991b1b;font-size:14px;font-weight:600;margin:0">Your spot has been released to the next person on the waitlist.</p>
     </div>
@@ -211,6 +211,12 @@ export async function sendFailedChargeEmail(opts: FailedChargeEmail): Promise<bo
     console.error("[email] failed-charge send failed:", err);
     return false;
   }
+}
+
+function fmtDate(d?: string | null): string {
+  if (!d) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
 }
 
 function escapeHtml(s: string) {

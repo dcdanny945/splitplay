@@ -40,6 +40,12 @@ function priceStrings(total: number, divisor: number) {
   return { base: r.base.toFixed(2), fee: r.fee.toFixed(2), charge: r.charge.toFixed(2) };
 }
 
+// "2026-06-28" -> "28/06/2026"
+function formatDmy(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 function formatCountdown(ms: number) {
   if (ms <= 0) return "Settlement complete";
   const d = Math.floor(ms / 86400000);
@@ -164,7 +170,7 @@ function CostDisplay({ total, count, mode, maxParticipants }: { total: number; c
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "#94a3b8", marginBottom: 4 }}>
             {isFixed ? "Pay now" : "You pay"}
           </div>
-          <div style={{ fontSize: 36, fontWeight: 800, color: "#34d399" }}>${charge}</div>
+          <div style={{ fontSize: 46, fontWeight: 800, color: "#34d399", lineHeight: 1.05 }}>${charge}</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "#94a3b8", marginBottom: 4 }}>
@@ -221,8 +227,10 @@ function ParticipantList({ participants, label, color, onRemove, isAdmin, isSett
               <span style={{ fontWeight: 600, color: "#1e293b" }}>{i + 1}. {p.name}</span>
               {p.paid ? (
                 <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#065f46", background: "#d1fae5", padding: "2px 8px", borderRadius: 99 }}>Confirmed</span>
-              ) : (
+              ) : isSettled ? (
                 <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#b91c1c", background: "#fee2e2", padding: "2px 8px", borderRadius: 99 }}>Unconfirmed</span>
+              ) : (
+                <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#92400e", background: "#fef3c7", padding: "2px 8px", borderRadius: 99 }}>Pending</span>
               )}
               {isAdmin && p.email && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>{p.email}</span>}
             </div>
@@ -678,11 +686,14 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
 
   return (
     <div style={{ background: "#fff", borderRadius: 20, padding: 28, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.04)" }}>
+      <div style={{ marginBottom: 20 }}>
+        <CostDisplay total={event.totalCost} count={event.participants.length} mode={event.paymentMode} maxParticipants={event.maxParticipants} />
+      </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{event.name}</div>
           <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 13, color: "#64748b", flexWrap: "wrap" }}>
-            {event.date && <span>Date: {event.date}</span>}
+            {event.date && <span>Date: {formatDmy(event.date)}</span>}
             {event.timeLabel && <span>Time: {event.timeLabel}</span>}
             {event.location && <span>Location: {event.location}</span>}
           </div>
@@ -746,10 +757,6 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
       {isAdmin && !isSettled && !isFixed && editingSettlement && (
         <SettlementEditor event={event} onUpdate={update} onClose={() => setEditingSettlement(false)} />
       )}
-
-      <div style={{ marginTop: 20 }}>
-        <CostDisplay total={event.totalCost} count={event.participants.length} mode={event.paymentMode} maxParticipants={event.maxParticipants} />
-      </div>
 
       <ProgressBar current={event.participants.length} max={event.maxParticipants} />
 

@@ -12,7 +12,9 @@ export async function GET() {
   const admin = await isAdmin();
 
   let query = supabaseAdmin.from("events").select("*").order("created_at", { ascending: false });
-  if (!admin) query = query.eq("status", "open").eq("visible", true);
+  // Non-admins see visible events (open OR settled) — the client hides them once
+  // the event date has passed.
+  if (!admin) query = query.eq("visible", true).neq("status", "cancelled");
   const { data: events, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
