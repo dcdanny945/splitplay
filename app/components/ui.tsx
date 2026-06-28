@@ -678,6 +678,9 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   const isFixed = event.paymentMode === "fixed";
   const divisor = isFixed ? event.maxParticipants : event.participants.length;
   const pricing = priceStrings(event.totalCost, divisor);
+  // Split events close to new registrations once the settlement time has passed
+  // (even before the cron has formally marked them settled).
+  const settlementPassed = !isFixed && !!event.cutoffTime && new Date(event.cutoffTime).getTime() <= Date.now();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState(false);
@@ -766,8 +769,15 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
       <ParticipantList participants={event.participants} label="Confirmed" color="#0d9488" onRemove={(id) => onRemove?.(id)} isAdmin={isAdmin} isSettled={isSettled} />
       <ParticipantList participants={event.waitlist} label="Waitlist" color="#f59e0b" onRemove={(id) => onRemove?.(id)} isAdmin={isAdmin} isSettled={isSettled} />
 
-      {!isAdmin && !isSettled && onRegister && (
+      {!isAdmin && !isSettled && !settlementPassed && onRegister && (
         <RegistrationForm event={event} onRegister={(name, email) => onRegister(event.id, name, email)} />
+      )}
+
+      {!isAdmin && !isSettled && settlementPassed && (
+        <div style={{ marginTop: 16, padding: 16, borderRadius: 14, background: "#f8fafc", border: "1px solid #e2e8f0", textAlign: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#475569" }}>Registration closed</div>
+          <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>The settlement time has passed for this event.</div>
+        </div>
       )}
 
       {isAdmin && !isSettled && onManualAdd && (

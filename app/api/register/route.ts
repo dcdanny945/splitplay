@@ -25,6 +25,11 @@ export async function POST(req: Request) {
   }
   const ev = event as EventRow;
 
+  // Split events stop taking registrations once the settlement time has passed.
+  if (ev.payment_mode === "split" && ev.settlement_time && new Date(ev.settlement_time).getTime() <= Date.now()) {
+    return NextResponse.json({ error: "Registration has closed — the settlement time has passed." }, { status: 400 });
+  }
+
   const confirmedCount = await getConfirmedCount(eventId);
   const isFull = confirmedCount >= ev.max_participants;
   const listType: "confirmed" | "waitlist" = isFull ? "waitlist" : "confirmed";
