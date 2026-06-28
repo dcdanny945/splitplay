@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { serializeEvent, type EventRow, type ParticipantRow } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { sanitizeNote } from "@/lib/sanitize";
+import { nextWeekdayTimeMelbourne, WEEKDAY_NUM } from "@/lib/time";
 
 // GET /api/events
 // Public: open events with sanitized participant info.
@@ -40,14 +41,23 @@ export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { name, event_date, time_label, location, description, total_cost, max_participants, payment_mode, settlement_time } = body;
+  const { name, event_date, time_label, location, description, total_cost, max_participants, payment_mode, settlement_time, settlement_day, settlement_hour, settlement_minute } = body;
 
   if (!name || typeof name !== "string") {
     return NextResponse.json({ error: "Event name is required" }, { status: 400 });
   }
   const mode = payment_mode === "fixed" ? "fixed" : "split";
-  if (mode === "split" && !settlement_time) {
-    return NextResponse.json({ error: "Split events need a settlement time" }, { status: 400 });
+
+  let settlementTime: string | null = null;
+  if (mode === "split") {
+    const wd = settlement_day !== undefined ? WEEKDAY_NUM[String(settlement_day).toLowerCase()] : undefined;
+    if (wd !== undefined) {
+      settlementTime = nextWeekdayTimeMelbourne(wd, Number(settlement_hour) || 0, Number(settlement_minute) || 0).toISOString();
+    } else if (settlement_time) {
+      settlementTime = settlement_time;
+    } else {
+      return NextResponse.json({ error: "Split events need a settlement day/time" }, { status: 400 });
+    }
   }
 
   const { data, error } = await supabaseAdmin
@@ -61,7 +71,7 @@ export async function POST(req: Request) {
       total_cost: Math.max(0, Number(total_cost) || 0),
       max_participants: Math.max(1, Math.min(500, Number(max_participants) || 1)),
       payment_mode: mode,
-      settlement_time: mode === "split" ? settlement_time : null,
+      settlement_time: settlementTime,
       status: "open",
     })
     .select()

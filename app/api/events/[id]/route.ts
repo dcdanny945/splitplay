@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { serializeEvent, promoteWaitlist, type EventRow, type ParticipantRow } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { sanitizeNote } from "@/lib/sanitize";
-import { nextThursday8pmMelbourne } from "@/lib/time";
+import { nextThursday8pmMelbourne, nextWeekdayTimeMelbourne, WEEKDAY_NUM } from "@/lib/time";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -40,6 +40,13 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (body.payment_mode === "split" || body.payment_mode === "fixed") patch.payment_mode = body.payment_mode;
   if (typeof body.visible === "boolean") patch.visible = body.visible;
   if (body.settlement_time !== undefined) patch.settlement_time = body.settlement_time || null;
+  // Admin picked a weekday + time -> compute the next occurrence in Melbourne (DST-correct).
+  if (body.settlement_day !== undefined) {
+    const wd = WEEKDAY_NUM[String(body.settlement_day).toLowerCase()];
+    if (wd !== undefined) {
+      patch.settlement_time = nextWeekdayTimeMelbourne(wd, Number(body.settlement_hour) || 0, Number(body.settlement_minute) || 0).toISOString();
+    }
+  }
 
   let raisedMax = false;
   if (body.max_participants !== undefined) {

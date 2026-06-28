@@ -551,6 +551,72 @@ function ManualAddForm({ onAdd }: { onAdd: (name: string, email: string) => Prom
   );
 }
 
+// ---------- Admin: edit a split event's auto-charge day/time ----------
+function settlementParts(iso: string | null): { day: string; hour: string; minute: string } {
+  if (!iso) return { day: "thursday", hour: "20", minute: "00" };
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("en-US", { timeZone: "Australia/Melbourne", weekday: "long" }).toLowerCase();
+  const hm = d.toLocaleTimeString("en-GB", { timeZone: "Australia/Melbourne", hour: "2-digit", minute: "2-digit", hour12: false });
+  return { day, hour: hm.slice(0, 2), minute: hm.slice(3, 5) };
+}
+
+function SettlementEditor({ event, onUpdate, onClose }: {
+  event: UIEvent; onUpdate: (patch: Record<string, unknown>) => void; onClose: () => void;
+}) {
+  const init = settlementParts(event.cutoffTime);
+  const [day, setDay] = useState(init.day);
+  const [hour, setHour] = useState(init.hour);
+  const [minute, setMinute] = useState(init.minute);
+
+  const save = () => {
+    onUpdate({ settlement_day: day, settlement_hour: Number(hour), settlement_minute: Number(minute) });
+    onClose();
+  };
+
+  const sel: React.CSSProperties = { padding: "10px 12px", borderRadius: 10, border: "2px solid #e2e8f0", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", background: "#fff" };
+  const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 4, display: "block" };
+
+  return (
+    <div style={{ marginTop: 16, padding: 16, borderRadius: 14, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e40af", marginBottom: 10 }}>
+        Auto-charge time <span style={{ fontSize: 11, fontWeight: 400, color: "#64748b" }}>— when everyone still in is charged (Melbourne)</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 10 }}>
+        <div>
+          <label style={lbl}>Day</label>
+          <select style={sel} value={day} onChange={(e) => setDay(e.target.value)}>
+            {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((d) => (
+              <option key={d} value={d}>{d[0].toUpperCase() + d.slice(1)}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Hour</label>
+          <select style={sel} value={hour} onChange={(e) => setHour(e.target.value)}>
+            {Array.from({ length: 24 }, (_, i) => {
+              const label = i === 0 ? "12 AM" : i < 12 ? `${i} AM` : i === 12 ? "12 PM" : `${i - 12} PM`;
+              return <option key={i} value={String(i).padStart(2, "0")}>{label}</option>;
+            })}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Min</label>
+          <select style={sel} value={minute} onChange={(e) => setMinute(e.target.value)}>
+            {["00", "15", "30", "45"].map((m) => <option key={m} value={m}>:{m}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={save} style={{ ...saveBtn, padding: "8px 16px" }}>Save</button>
+        <button onClick={onClose} style={cancelBtn}>Cancel</button>
+      </div>
+      <div style={{ fontSize: 11, color: "#64748b", marginTop: 8 }}>
+        Sets the next upcoming {day[0].toUpperCase() + day.slice(1)}. Cards are charged at the daily check just after this time.
+      </div>
+    </div>
+  );
+}
+
 // ---------- Event card ----------
 export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd }: {
   event: UIEvent;
@@ -568,6 +634,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   const pricing = priceStrings(event.totalCost, divisor);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
+  const [editingSettlement, setEditingSettlement] = useState(false);
 
   const update = (patch: Record<string, unknown>) => onUpdate?.(event.id, patch);
 
@@ -626,11 +693,19 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
               {editingDetails ? "Close details" : "✏️ Edit details"}
             </button>
           )}
+          {isAdmin && !isSettled && !isFixed && (
+            <button onClick={() => setEditingSettlement((v) => !v)} style={dashBtn}>
+              {editingSettlement ? "Close charge time" : "⏰ Charge time"}
+            </button>
+          )}
         </div>
       </div>
 
       {isAdmin && !isSettled && editingDetails && (
         <EventDetailsEditor event={event} onUpdate={update} onClose={() => setEditingDetails(false)} />
+      )}
+      {isAdmin && !isSettled && !isFixed && editingSettlement && (
+        <SettlementEditor event={event} onUpdate={update} onClose={() => setEditingSettlement(false)} />
       )}
 
       <div style={{ marginTop: 20 }}>
@@ -710,42 +785,16 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
   });
   const update = (k: string, v: string | number) => setForm({ ...form, [k]: v });
 
-  const getSettlementDate = () => {
-    if (!form.eventDate) return null;
-    const evtDate = new Date(form.eventDate + "T00:00:00");
-    const dayMap: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
-    const targetDay = dayMap[form.settlementDay];
-    const evtDay = evtDate.getDay();
-    let diff = targetDay - evtDay;
-    if (diff <= 0) diff += 7; // settlement on/after the event's following target weekday
-    const settlDate = new Date(evtDate);
-    settlDate.setDate(evtDate.getDate() + diff);
-    return settlDate;
-  };
-
-  const getSettlementLabel = () => {
-    const d = getSettlementDate();
-    if (!d) return "";
-    const h = form.settlementHour.padStart(2, "0");
+  const settlementPreview = () => {
     const m = form.settlementMinute.padStart(2, "0");
-    const hNum = Number(h);
-    const period = hNum === 0 && m === "00" ? "12:00 AM (midnight)" : `${h}:${m} ${hNum < 12 ? "AM" : "PM"}`;
-    return `${d.toLocaleDateString("en-AU", { weekday: "long", month: "short", day: "numeric" })} at ${period} AEST`;
+    const hNum = Number(form.settlementHour);
+    const period = hNum === 0 ? `12:${m} AM` : hNum < 12 ? `${hNum}:${m} AM` : hNum === 12 ? `12:${m} PM` : `${hNum - 12}:${m} PM`;
+    const dayCap = form.settlementDay[0].toUpperCase() + form.settlementDay.slice(1);
+    return `${dayCap} at ${period} (Melbourne)`;
   };
 
   const handleCreate = () => {
     if (!form.name) return;
-    let settlement_time: string | null = null;
-    if (form.paymentMode === "split") {
-      const settlDate = getSettlementDate();
-      if (!settlDate) return;
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const h = Number(form.settlementHour);
-      const m = Number(form.settlementMinute);
-      // Melbourne is UTC+11 (AEDT) / +10 (AEST). +11 is a safe approximation here.
-      const isoStr = `${settlDate.getFullYear()}-${pad(settlDate.getMonth() + 1)}-${pad(settlDate.getDate())}T${pad(h)}:${pad(m)}:00+11:00`;
-      settlement_time = new Date(isoStr).toISOString();
-    }
     onCreate({
       name: form.name,
       event_date: form.eventDate || null,
@@ -755,7 +804,9 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
       total_cost: Number(form.totalCost),
       max_participants: Number(form.maxParticipants),
       payment_mode: form.paymentMode,
-      settlement_time,
+      settlement_day: form.paymentMode === "split" ? form.settlementDay : undefined,
+      settlement_hour: form.paymentMode === "split" ? Number(form.settlementHour) : undefined,
+      settlement_minute: form.paymentMode === "split" ? Number(form.settlementMinute) : undefined,
     });
     setForm({ ...form, name: "", eventDate: "", timeLabel: "", location: "", description: "" });
   };
@@ -845,16 +896,17 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
                 </select>
               </div>
             </div>
-            {form.eventDate ? (
-              <div style={{ fontSize: 12, color: "#0d9488", marginTop: 10, fontWeight: 600 }}>Settlement: {getSettlementLabel()}</div>
-            ) : (
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 10 }}>Select an event date to see the settlement time</div>
-            )}
+            <div style={{ fontSize: 12, color: "#0d9488", marginTop: 10, fontWeight: 600 }}>
+              Auto-charge: {settlementPreview()}
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+              Charged on the next matching day after people register.
+            </div>
           </div>
         )}
 
-        <button onClick={handleCreate} disabled={!form.name || (form.paymentMode === "split" && !form.eventDate)}
-          style={{ marginTop: 8, padding: 16, borderRadius: 14, border: "none", background: !form.name || (form.paymentMode === "split" && !form.eventDate) ? "#cbd5e1" : "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+        <button onClick={handleCreate} disabled={!form.name}
+          style={{ marginTop: 8, padding: 16, borderRadius: 14, border: "none", background: !form.name ? "#cbd5e1" : "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
           Create Event
         </button>
       </div>
