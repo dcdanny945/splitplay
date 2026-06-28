@@ -95,7 +95,10 @@ export async function sendRegistrationEmail(opts: RegistrationEmail): Promise<bo
   <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
     <div style="font-size:20px;font-weight:800;color:#0d9488">Bball Court Fee</div>
     <h1 style="font-size:18px;margin:16px 0 4px">You're registered ✅</h1>
-    <p style="color:#475569;font-size:14px;margin:0 0 20px">Hi ${escapeHtml(opts.name)}, your spot is saved. Your card is stored securely on Stripe — you won't be charged until settlement.</p>
+    <p style="color:#475569;font-size:14px;margin:0 0 16px">Hi ${escapeHtml(opts.name)}, your spot is saved. Your card is stored securely on Stripe — you won't be charged until settlement.</p>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin:0 0 20px">
+      <p style="color:#92400e;font-size:14px;font-weight:700;margin:0">⚠️ Please ensure you have sufficient balance before settlement in order to secure your spot.</p>
+    </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
       <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Event</div>
       <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
