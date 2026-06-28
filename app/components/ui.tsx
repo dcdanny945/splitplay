@@ -170,7 +170,7 @@ function CostDisplay({ total, count, mode, maxParticipants }: { total: number; c
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "#94a3b8", marginBottom: 4 }}>
             {isFixed ? "Pay now" : "You pay"}
           </div>
-          <div style={{ fontSize: 46, fontWeight: 800, color: "#34d399", lineHeight: 1.05 }}>${charge}</div>
+          <div style={{ fontSize: 36, fontWeight: 800, color: "#34d399" }}>${charge}</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "#94a3b8", marginBottom: 4 }}>
@@ -392,7 +392,7 @@ function TotalCostEditor({ event, onUpdate }: { event: UIEvent; onUpdate: (patch
   const [val, setVal] = useState<number | string>(event.totalCost);
   const save = () => { onUpdate({ total_cost: Math.max(0, Number(val) || event.totalCost) }); setEditing(false); };
   if (!editing) {
-    return <button onClick={() => { setVal(event.totalCost); setEditing(true); }} style={dashBtn}>Total: ${event.totalCost} (edit)</button>;
+    return <button onClick={() => { setVal(event.totalCost); setEditing(true); }} style={{ background: "#fff", border: "2px solid #0d9488", borderRadius: 10, padding: "8px 14px", fontSize: 16, fontWeight: 800, color: "#0d9488", cursor: "pointer", fontFamily: "inherit" }}>Total: ${event.totalCost} (edit)</button>;
   }
   return (
     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -686,9 +686,6 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
 
   return (
     <div style={{ background: "#fff", borderRadius: 20, padding: 28, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.04)" }}>
-      <div style={{ marginBottom: 20 }}>
-        <CostDisplay total={event.totalCost} count={event.participants.length} mode={event.paymentMode} maxParticipants={event.maxParticipants} />
-      </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{event.name}</div>
@@ -735,8 +732,8 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
             </button>
           )}
           {isAdmin && !isSettled && <PaymentModeToggle event={event} onUpdate={update} />}
-          {isAdmin && !isSettled && <MaxParticipantsEditor event={event} onUpdate={update} />}
           {isAdmin && !isSettled && <TotalCostEditor event={event} onUpdate={update} />}
+          {isAdmin && !isSettled && <MaxParticipantsEditor event={event} onUpdate={update} />}
           {isAdmin && !isSettled && !isFixed && <WaitlistEditor event={event} onUpdate={update} />}
           {isAdmin && !isSettled && (
             <button onClick={() => setEditingDetails((v) => !v)} style={dashBtn}>
@@ -757,6 +754,10 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
       {isAdmin && !isSettled && !isFixed && editingSettlement && (
         <SettlementEditor event={event} onUpdate={update} onClose={() => setEditingSettlement(false)} />
       )}
+
+      <div style={{ marginTop: 20 }}>
+        <CostDisplay total={event.totalCost} count={event.participants.length} mode={event.paymentMode} maxParticipants={event.maxParticipants} />
+      </div>
 
       <ProgressBar current={event.participants.length} max={event.maxParticipants} />
 
