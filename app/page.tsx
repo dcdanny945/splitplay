@@ -24,9 +24,13 @@ export default function UserPage() {
     try {
       const res = await fetch("/api/events", { cache: "no-store" });
       const data = await res.json();
-      // Always respect visibility (even if an admin is logged in this browser),
-      // and drop events whose date has already passed.
-      setEvents((data.events || []).filter((e: UIEvent) => e.visible && !isEventOver(e.date)));
+      // Always respect visibility + cancellation (even if an admin is logged in
+      // this browser), and drop events whose date has already passed.
+      setEvents(
+        (data.events || []).filter(
+          (e: UIEvent) => e.visible && e.status !== "cancelled" && !isEventOver(e.date)
+        )
+      );
     } catch {
       setNotification({ type: "error", message: "Could not load events" });
     } finally {

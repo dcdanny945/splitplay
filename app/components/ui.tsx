@@ -818,7 +818,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
       {isAdmin && !isSettled && !isCancelled && onCancel && (
         <div style={{ marginTop: 16, borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
           {!confirmCancel ? (
-            <button onClick={() => setConfirmCancel(true)} style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #fed7aa", background: "#fff", color: "#c2410c", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={() => setConfirmCancel(true)} style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #fcd34d", background: "#fef3c7", color: "#92400e", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Cancel event (notify registrants)
             </button>
           ) : (
