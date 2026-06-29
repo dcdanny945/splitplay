@@ -105,6 +105,18 @@ export default function AdminPage() {
     }
   };
 
+  const onCancel = async (eventId: string) => {
+    notify("info", "Cancelling & emailing registrants…");
+    const res = await fetch(`/api/events/${eventId}/cancel`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      notify("success", `Event cancelled — emailed ${data.emailed}/${data.total} registrants`);
+      loadEvents();
+    } else {
+      notify("error", data.error || "Cancel failed");
+    }
+  };
+
   const onManualAdd = async (eventId: string, name: string, email: string): Promise<string | null> => {
     const res = await fetch(`/api/events/${eventId}/manual`, {
       method: "POST",
@@ -177,6 +189,7 @@ export default function AdminPage() {
           onSettle={onSettle}
           onDelete={onDelete}
           onManualAdd={onManualAdd}
+          onCancel={onCancel}
         />
       ))}
     </div>

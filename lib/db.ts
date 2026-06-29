@@ -69,6 +69,26 @@ export async function getWaitlistCount(eventId: string): Promise<number> {
   return count ?? 0;
 }
 
+/** Deletes the Stripe customers (and their saved cards) we created for an
+ *  event's participants. Used when cancelling/deleting an event. Never charges. */
+export async function deleteStripeCustomersForEvent(eventId: string): Promise<void> {
+  const { data } = await supabaseAdmin
+    .from("participants")
+    .select("stripe_customer_id")
+    .eq("event_id", eventId);
+  const seen = new Set<string>();
+  for (const p of (data ?? []) as { stripe_customer_id: string | null }[]) {
+    const cid = p.stripe_customer_id;
+    if (!cid || seen.has(cid)) continue;
+    seen.add(cid);
+    try {
+      await stripe.customers.del(cid);
+    } catch (err) {
+      console.error(`[cleanup] failed to delete Stripe customer ${cid}:`, err);
+    }
+  }
+}
+
 /** The waitlister who would be promoted next (lowest position). */
 export async function getNextWaitlistId(eventId: string): Promise<string | null> {
   const { data } = await supabaseAdmin

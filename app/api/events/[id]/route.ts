@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { serializeEvent, promoteWaitlist, type EventRow, type ParticipantRow } from "@/lib/db";
+import { serializeEvent, promoteWaitlist, deleteStripeCustomersForEvent, type EventRow, type ParticipantRow } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { sanitizeNote } from "@/lib/sanitize";
 import { nextThursday8pmMelbourne, nextWeekdayTimeMelbourne, WEEKDAY_NUM } from "@/lib/time";
@@ -83,6 +83,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
 export async function DELETE(_req: Request, { params }: Ctx) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  // Clean up saved cards before removing the event (never charges).
+  await deleteStripeCustomersForEvent(id);
   const { error } = await supabaseAdmin.from("events").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

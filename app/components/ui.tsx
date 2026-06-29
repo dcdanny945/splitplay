@@ -664,7 +664,7 @@ function SettlementEditor({ event, onUpdate, onClose }: {
 }
 
 // ---------- Event card ----------
-export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd }: {
+export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd, onCancel }: {
   event: UIEvent;
   isAdmin: boolean;
   onRegister?: (eventId: string, name: string, email: string) => Promise<string | null>;
@@ -673,8 +673,10 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   onSettle?: (eventId: string) => void;
   onDelete?: (eventId: string) => void;
   onManualAdd?: (eventId: string, name: string, email: string) => Promise<string | null>;
+  onCancel?: (eventId: string) => void;
 }) {
   const isSettled = event.status === "settled";
+  const isCancelled = event.status === "cancelled";
   const isFixed = event.paymentMode === "fixed";
   const divisor = isFixed ? event.maxParticipants : event.participants.length;
   const pricing = priceStrings(event.totalCost, divisor);
@@ -682,6 +684,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   // (even before the cron has formally marked them settled).
   const settlementPassed = !isFixed && !!event.cutoffTime && new Date(event.cutoffTime).getTime() <= Date.now();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState(false);
 
@@ -710,8 +713,8 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {isAdmin && (
-            <div style={{ padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700, background: isSettled ? "#fef3c7" : "#d1fae5", color: isSettled ? "#92400e" : "#065f46" }}>
-              {isSettled ? "Settled" : "Open"}
+            <div style={{ padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700, background: isCancelled ? "#f1f5f9" : isSettled ? "#fef3c7" : "#d1fae5", color: isCancelled ? "#64748b" : isSettled ? "#92400e" : "#065f46" }}>
+              {isCancelled ? "Cancelled" : isSettled ? "Settled" : "Open"}
             </div>
           )}
           {isAdmin && (
@@ -780,11 +783,11 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
         </div>
       )}
 
-      {isAdmin && !isSettled && onManualAdd && (
+      {isAdmin && !isSettled && !isCancelled && onManualAdd && (
         <ManualAddForm onAdd={(name, email) => onManualAdd(event.id, name, email)} />
       )}
 
-      {isAdmin && !isSettled && !isFixed && (
+      {isAdmin && !isSettled && !isCancelled && !isFixed && (
         <div style={{ marginTop: 20 }}>
           <button onClick={() => onSettle?.(event.id)} style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", background: "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
             Force Settle Now — ${pricing.charge} each
@@ -809,6 +812,24 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
             {event.participants.length} people × ${pricing.charge} (incl. ${pricing.fee} Stripe fee)
           </div>
           <div style={{ fontSize: 12, color: "#059669", marginTop: 4, fontWeight: 600 }}>Organiser receives: ${event.totalCost}</div>
+        </div>
+      )}
+
+      {isAdmin && !isSettled && !isCancelled && onCancel && (
+        <div style={{ marginTop: 16, borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+          {!confirmCancel ? (
+            <button onClick={() => setConfirmCancel(true)} style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #fed7aa", background: "#fff", color: "#c2410c", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              Cancel event (notify registrants)
+            </button>
+          ) : (
+            <div style={{ background: "#fff7ed", borderRadius: 12, padding: 16, border: "1px solid #fed7aa", textAlign: "center" }}>
+              <div style={{ fontSize: 13, color: "#9a3412", fontWeight: 600, marginBottom: 12 }}>Cancel this session? Everyone gets an email, nobody is charged, and it disappears from the registration page.</div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                <button onClick={() => { onCancel(event.id); setConfirmCancel(false); }} style={{ padding: "8px 20px", borderRadius: 10, border: "none", background: "#f97316", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Yes, cancel & notify</button>
+                <button onClick={() => setConfirmCancel(false)} style={{ padding: "8px 20px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Back</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

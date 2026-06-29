@@ -110,7 +110,7 @@ export async function sendRegistrationEmail(opts: RegistrationEmail): Promise<bo
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0">
         <div style="font-size:13px;color:#64748b">You'll be charged your share at:</div>
         <div style="font-size:15px;font-weight:700;color:#0d9488;margin-top:2px">${escapeHtml(opts.settlementLabel)}</div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:4px">The total cost is split evenly among everyone still registered at that time.</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">The total cost is split evenly among everyone registered at that time.</div>
       </div>
     </div>
     <div style="margin-top:20px;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:14px">
@@ -209,6 +209,51 @@ export async function sendFailedChargeEmail(opts: FailedChargeEmail): Promise<bo
     return true;
   } catch (err) {
     console.error("[email] failed-charge send failed:", err);
+    return false;
+  }
+}
+
+// ---------- Event cancellation notice ----------
+export type CancellationEmail = {
+  to: string;
+  name: string;
+  eventName: string;
+  date?: string | null;
+  time?: string | null;
+  location?: string | null;
+};
+
+export async function sendCancellationEmail(opts: CancellationEmail): Promise<boolean> {
+  if (!transporter) {
+    console.warn(`[email] credentials not set — skipping cancellation email to ${opts.to}`);
+    return false;
+  }
+  const from = process.env.EMAIL_FROM || `Bball Court Fee <${GMAIL_USER}>`;
+  const subject = ["Bball Sesh", fmtDate(opts.date), opts.time, "cancelled"].filter(Boolean).join(" ");
+
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
+    <div style="font-size:20px;font-weight:800;color:#0d9488">Bball Court Fee</div>
+    <h1 style="font-size:18px;margin:16px 0 4px">Session cancelled</h1>
+    <p style="color:#475569;font-size:14px;margin:0 0 20px">Hi ${escapeHtml(opts.name)}, unfortunately we didn't get enough players this time, so this session has been cancelled for now — we might look into booking the court again next week.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Event</div>
+      <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
+      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(fmtDate(opts.date))}</div>` : ""}
+      ${opts.time ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Time: ${escapeHtml(opts.time)}</div>` : ""}
+      ${opts.location ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Location: ${escapeHtml(opts.location)}</div>` : ""}
+    </div>
+    <div style="margin-top:20px;padding:16px;background:#f0fdf4;border:1px solid #86efac;border-radius:14px">
+      <p style="color:#065f46;font-size:14px;font-weight:600;margin:0">✅ Good news — you won't be charged anything, and your saved card details have been removed.</p>
+    </div>
+    <p style="color:#475569;font-size:14px;margin-top:20px">You'll need to <b>sign up again</b> when the new session opens. Hope to see you on the court soon! 🏀</p>
+  </div>`;
+
+  try {
+    await transporter.sendMail({ from, to: opts.to, subject, html });
+    return true;
+  } catch (err) {
+    console.error("[email] cancellation send failed:", err);
     return false;
   }
 }
