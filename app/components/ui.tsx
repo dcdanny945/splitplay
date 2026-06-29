@@ -695,7 +695,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{event.name}</div>
-          <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 13, color: "#64748b", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 18, marginTop: 10, fontSize: 15, fontWeight: 600, color: "#334155", flexWrap: "wrap" }}>
             {event.date && <span>Date: {formatDmy(event.date)}</span>}
             {event.timeLabel && <span>Time: {event.timeLabel}</span>}
             {event.location && <span>Location: {event.location}</span>}
@@ -836,7 +836,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
       {isAdmin && (
         <div style={{ marginTop: 16, borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
           {!confirmDelete ? (
-            <button onClick={() => setConfirmDelete(true)} style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #fecaca", background: "#fff", color: "#ef4444", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={() => setConfirmDelete(true)} style={{ width: "100%", padding: 12, borderRadius: 12, border: "none", background: "#ef4444", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Delete Event
             </button>
           ) : (
