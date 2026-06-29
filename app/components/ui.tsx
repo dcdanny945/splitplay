@@ -196,9 +196,9 @@ function ProgressBar({ current, max }: { current: number; max: number }) {
   const isFull = current >= max;
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 6 }}>
-        <span>{current} / {max} spots</span>
-        <span style={{ color: isFull ? "#ef4444" : "#059669", fontWeight: 600 }}>{isFull ? "Full" : "Open"}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, marginBottom: 8 }}>
+        <span style={{ fontWeight: 700, color: "#334155" }}>{current} / {max} spots</span>
+        <span style={{ color: isFull ? "#ef4444" : "#059669", fontWeight: 700 }}>{isFull ? "Full" : "Open"}</span>
       </div>
       <div style={{ height: 8, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: isFull ? "linear-gradient(90deg, #ef4444, #f97316)" : "linear-gradient(90deg, #06b6d4, #34d399)", transition: "width 0.5s ease" }} />
