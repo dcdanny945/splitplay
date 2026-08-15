@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { calcCharge } from "@/lib/pricing";
+import { RichTextEditor, noteToHtml } from "./richtext";
 
 // ---------- Shared types (mirror serializeEvent in lib/db.ts) ----------
 export type UIParticipant = {
@@ -470,37 +471,23 @@ function EventDetailsEditor({ event, onUpdate, onClose }: {
 }
 
 // ---------- Admin: rich-text note shown right under the date ----------
-// Click to edit; toolbar gives bold / italic / underline / font size. The HTML
-// is sanitized on the server before it's stored (see lib/sanitize.ts).
+// Click to edit; toolbar gives bold / italic / underline / font size, and
+// pasted rich text keeps its formatting (see RichTextEditor). The HTML is
+// sanitized on the server before it's stored (see lib/sanitize.ts).
 function RichNote({ event, onUpdate }: { event: UIEvent; onUpdate: (patch: Record<string, unknown>) => void }) {
   const [editing, setEditing] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const initial = event.description || "";
-
-  const cmd = (command: string) => {
-    document.execCommand(command, false);
-    ref.current?.focus();
-  };
-
-  const setSize = (level: string) => {
-    if (!level) return;
-    // Built-in command: normalizes the selection's font size (replaces any
-    // existing size) instead of nesting spans, so Large -> Normal works.
-    document.execCommand("styleWithCSS", false, "true");
-    document.execCommand("fontSize", false, level);
-    ref.current?.focus();
-  };
+  const initial = noteToHtml(event.description);
+  const [html, setHtml] = useState(initial);
 
   const save = () => {
-    const html = (ref.current?.innerHTML || "").trim();
-    onUpdate({ description: html || null });
+    onUpdate({ description: html.trim() || null });
     setEditing(false);
   };
 
   if (!editing) {
     return (
       <div
-        onClick={() => setEditing(true)}
+        onClick={() => { setHtml(initial); setEditing(true); }}
         style={{ marginTop: 8, cursor: "pointer", fontSize: 13, lineHeight: 1.5 }}
       >
         {initial ? (
@@ -513,36 +500,12 @@ function RichNote({ event, onUpdate }: { event: UIEvent; onUpdate: (patch: Recor
     );
   }
 
-  const tbtn: React.CSSProperties = { border: "1px solid #cbd5e1", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", lineHeight: 1 };
-  const tsel: React.CSSProperties = { border: "1px solid #cbd5e1", background: "#fff", borderRadius: 8, padding: "3px 8px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
-
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); cmd("bold"); }} style={tbtn}><b>B</b></button>
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); cmd("italic"); }} style={tbtn}><i>I</i></button>
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); cmd("underline"); }} style={tbtn}><u>U</u></button>
-        <select
-          value=""
-          onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => { setSize(e.target.value); }}
-          style={tsel}
-        >
-          <option value="" disabled>Size</option>
-          <option value="2">Small</option>
-          <option value="3">Normal</option>
-          <option value="5">Large</option>
-          <option value="6">Huge</option>
-        </select>
-        <span style={{ fontSize: 11, color: "#94a3b8" }}>select text, then format</span>
-      </div>
-      <div
-        ref={ref}
-        contentEditable
-        suppressContentEditableWarning
-        dangerouslySetInnerHTML={{ __html: initial }}
-        data-placeholder="Bring a white & a dark shirt. Court 3, enter via Gate B."
-        style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "2px solid #06b6d4", fontSize: 13, outline: "none", minHeight: 60, lineHeight: 1.5, color: "#475569" }}
+      <RichTextEditor
+        initialHtml={initial}
+        onChange={setHtml}
+        placeholder="Bring a white & a dark shirt. Court 3, enter via Gate B."
       />
       <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
         <button onClick={save} style={{ ...saveBtn, padding: "6px 14px" }}>Save</button>
@@ -706,7 +669,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
             event.description && (
               <div
                 style={{ marginTop: 8, fontSize: 13, color: "#475569", lineHeight: 1.5 }}
-                dangerouslySetInnerHTML={{ __html: event.description }}
+                dangerouslySetInnerHTML={{ __html: noteToHtml(event.description) }}
               />
             )
           )}
@@ -861,6 +824,9 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
     settlementDay: "thursday", settlementHour: "20", settlementMinute: "00",
     paymentMode: "split",
   });
+  // The note editor is uncontrolled (contentEditable); bumping the key remounts
+  // it so it clears along with the rest of the form after an event is created.
+  const [noteKey, setNoteKey] = useState(0);
   const update = (k: string, v: string | number) => setForm({ ...form, [k]: v });
 
   const settlementPreview = () => {
@@ -888,6 +854,7 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
       settlement_minute: form.paymentMode === "split" ? Number(form.settlementMinute) : undefined,
     });
     setForm({ ...form, name: "", eventDate: "", timeLabel: "", location: "", description: "" });
+    setNoteKey((k) => k + 1);
   };
 
   const iStyle: React.CSSProperties = { padding: "12px 16px", borderRadius: 10, border: "2px solid #e2e8f0", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit" };
@@ -918,7 +885,12 @@ export function CreateEventForm({ onCreate }: { onCreate: (payload: Record<strin
         </div>
         <div>
           <label style={labelStyle}>Note for registrants (optional)</label>
-          <textarea style={{ ...iStyle, minHeight: 60, resize: "vertical" }} placeholder="e.g. Bring a white & a dark shirt. Court 3." value={form.description} onChange={(e) => update("description", e.target.value)} />
+          <RichTextEditor
+            key={noteKey}
+            onChange={(html) => update("description", html)}
+            placeholder="e.g. Bring a white & a dark shirt. Court 3."
+            minHeight={90}
+          />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div>

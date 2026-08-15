@@ -17,6 +17,13 @@ body {
   background: #e2e8f0;
 }
 
+/* Placeholder for the contentEditable note editor (see components/richtext.tsx) */
+[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;
