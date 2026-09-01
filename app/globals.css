@@ -24,6 +24,17 @@ body {
   pointer-events: none;
 }
 
+/* Pinned event summary — phones only (see MobileEventSummary) */
+.phone-only {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .phone-only {
+    display: block;
+  }
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;

@@ -724,11 +724,12 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
         <SettlementEditor event={event} onUpdate={update} onClose={() => setEditingSettlement(false)} />
       )}
 
-      <div style={{ marginTop: 20 }}>
+      {/* data-cost-panel: while this is on screen the pinned phone summary
+          steps aside, since it would only repeat these same numbers. */}
+      <div data-cost-panel style={{ marginTop: 20 }}>
         <CostDisplay total={event.totalCost} count={event.participants.length} mode={event.paymentMode} maxParticipants={event.maxParticipants} />
+        <ProgressBar current={event.participants.length} max={event.maxParticipants} />
       </div>
-
-      <ProgressBar current={event.participants.length} max={event.maxParticipants} />
 
       {!isSettled && !isFixed && event.cutoffTime && <CountdownTimer cutoffTime={event.cutoffTime} />}
 
@@ -1012,6 +1013,63 @@ export function Header({ active, isAdmin, onLogout }: { active: "user" | "admin"
           {isAdmin && onLogout && (
             <button onClick={onLogout} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #fecaca", background: "transparent", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Logout</button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Compact summary pinned under the header (phones only) ----------
+// On a phone the price panel and the spots bar scroll away long before the
+// participant list ends, so the numbers people actually care about — what they
+// pay and how many spots are left — ride along under the nav instead.
+export function MobileEventSummary({ event, showName, hidden }: { event: UIEvent; showName?: boolean; hidden?: boolean }) {
+  const isFixed = event.paymentMode === "fixed";
+  const count = event.participants.length;
+  const max = event.maxParticipants;
+  const { charge } = priceStrings(event.totalCost, isFixed ? max : count);
+  const isFull = count >= max;
+  const pct = Math.min((count / max) * 100, 100);
+
+  return (
+    // Collapsing max-height rather than sliding: the strip keeps its place in
+    // the flow, so folding it away never leaves a gap under the header.
+    <div
+      className="phone-only"
+      style={{
+        position: "sticky", top: 56, zIndex: 49,
+        background: "linear-gradient(135deg, #0f172a, #1e293b)",
+        borderBottom: hidden ? "none" : "1px solid rgba(255,255,255,0.08)",
+        overflow: "hidden",
+        maxHeight: hidden ? 0 : 120,
+        opacity: hidden ? 0 : 1,
+        transition: "max-height 0.22s ease, opacity 0.16s ease",
+      }}
+    >
+      <div style={{ padding: "7px 16px 8px" }}>
+        {showName && (
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {event.name}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#94a3b8" }}>
+              {isFixed ? "Pay now" : "You pay"}
+            </span>
+            <span style={{ fontSize: 19, fontWeight: 800, color: "#34d399" }}>${charge}</span>
+            <span style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>of ${event.totalCost}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#e2e8f0" }}>{count}/{max}</span>
+            {event.waitlist.length > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#fbbf24" }}>+{event.waitlist.length}</span>
+            )}
+            <span style={{ fontSize: 11, fontWeight: 700, color: isFull ? "#f87171" : "#34d399" }}>{isFull ? "Full" : "Open"}</span>
+          </div>
+        </div>
+        <div style={{ height: 4, marginTop: 6, background: "rgba(255,255,255,0.12)", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: isFull ? "linear-gradient(90deg, #ef4444, #f97316)" : "linear-gradient(90deg, #06b6d4, #34d399)", transition: "width 0.5s ease" }} />
         </div>
       </div>
     </div>
