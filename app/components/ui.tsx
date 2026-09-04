@@ -272,6 +272,112 @@ function ParticipantList({ participants, label, color, onRemove, onMarkPaid, isA
   );
 }
 
+// ---------- Admin: fold this session into another one ----------
+// One mechanism, two uses: leave cost/spots alone and it's "this one didn't
+// fill, move everyone across"; change them and it's a merge where the combined
+// group splits what the courts actually cost.
+function MergePanel({ event, targets, onMerge, onClose }: {
+  event: UIEvent;
+  targets: UIEvent[];
+  onMerge: (targetId: string, totalCost: string, maxParticipants: string) => Promise<string | null>;
+  onClose: () => void;
+}) {
+  const [targetId, setTargetId] = useState(targets[0]?.id ?? "");
+  const target = targets.find((t) => t.id === targetId);
+  const [cost, setCost] = useState(String(target?.totalCost ?? ""));
+  const [max, setMax] = useState(String(target?.maxParticipants ?? ""));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const pickTarget = (id: string) => {
+    const t = targets.find((x) => x.id === id);
+    setTargetId(id);
+    setCost(String(t?.totalCost ?? ""));
+    setMax(String(t?.maxParticipants ?? ""));
+  };
+
+  const moving = event.participants.length + event.waitlist.length;
+  const maxNum = Number(max);
+  const spotsFree = target ? Math.max(0, (Number.isFinite(maxNum) ? maxNum : target.maxParticipants) - target.participants.length) : 0;
+  const willConfirm = Math.min(moving, spotsFree);
+  const willWait = moving - willConfirm;
+  const perHead = target && Number(cost) > 0 ? (Number(cost) / Math.max(1, target.participants.length + willConfirm)).toFixed(2) : null;
+
+  const go = async () => {
+    if (!targetId) return;
+    setBusy(true);
+    setErr("");
+    const e = await onMerge(targetId, cost, max);
+    setBusy(false);
+    if (e) setErr(e);
+  };
+
+  const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 4, display: "block" };
+  const inp: React.CSSProperties = { padding: "8px 10px", borderRadius: 8, border: "2px solid #e2e8f0", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit" };
+
+  if (targets.length === 0) {
+    return (
+      <div style={{ marginTop: 16, padding: 16, borderRadius: 14, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+        <div style={{ fontSize: 13, color: "#64748b" }}>No other open session to merge into.</div>
+        <button onClick={onClose} style={{ ...cancelBtn, marginTop: 8 }}>Close</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 16, padding: 16, borderRadius: 14, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 12 }}>
+        Merge into another session
+        <span style={{ fontSize: 11, fontWeight: 400, color: "#94a3b8", marginLeft: 6 }}>
+          — moves all {moving} people across, then cancels this one
+        </span>
+      </div>
+
+      <label style={lbl}>Move everyone to</label>
+      <select value={targetId} onChange={(e) => pickTarget(e.target.value)} style={{ ...inp, background: "#fff" }}>
+        {targets.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name} — {t.participants.length}/{t.maxParticipants} spots
+          </option>
+        ))}
+      </select>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+        <div>
+          <label style={lbl}>Total cost of {target?.name?.slice(0, 18) ?? "target"} ($)</label>
+          <input style={inp} type="number" value={cost} onChange={(e) => setCost(e.target.value)} />
+        </div>
+        <div>
+          <label style={lbl}>Max spots</label>
+          <input style={inp} type="number" value={max} onChange={(e) => setMax(e.target.value)} />
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+        Prefilled with the target&apos;s current settings — change them if the merged group is paying for a different booking.
+      </div>
+
+      <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "#ecfeff", border: "1px solid #a5f3fc", fontSize: 12, color: "#0e7490", lineHeight: 1.6 }}>
+        <b>{willConfirm}</b> will get a confirmed spot, <b>{willWait}</b> will go to the waitlist
+        {willWait > 0 && <span> (the waitlist cap is raised to fit them)</span>}.
+        {perHead && <div style={{ marginTop: 4 }}>Split then works out around <b>${perHead}</b> each before the Stripe fee.</div>}
+        <div style={{ marginTop: 4 }}>Everyone moved keeps their saved card and gets an email explaining the change.</div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button
+          onClick={go}
+          disabled={busy}
+          style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: busy ? "#94a3b8" : "#0d9488", color: "#fff", fontSize: 13, fontWeight: 700, cursor: busy ? "default" : "pointer", fontFamily: "inherit" }}
+        >
+          {busy ? "Moving…" : `Move ${moving} people & cancel this session`}
+        </button>
+        <button onClick={onClose} style={cancelBtn}>Cancel</button>
+      </div>
+      {err && <div style={{ color: "#ef4444", fontSize: 12, marginTop: 8 }}>{err}</div>}
+    </div>
+  );
+}
+
 // ---------- Admin: hand someone their change-card link ----------
 // Registrations made before this feature shipped have no link in their
 // confirmation email, so the organiser needs to be able to produce one.
@@ -688,7 +794,7 @@ function SettlementEditor({ event, onUpdate, onClose }: {
 }
 
 // ---------- Event card ----------
-export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd, onMarkPaid, onCancel }: {
+export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd, onMarkPaid, onMerge, mergeTargets, onCancel }: {
   event: UIEvent;
   isAdmin: boolean;
   onRegister?: (eventId: string, name: string, email: string) => Promise<string | null>;
@@ -698,6 +804,8 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   onDelete?: (eventId: string) => void;
   onManualAdd?: (eventId: string, name: string, email: string) => Promise<string | null>;
   onMarkPaid?: (eventId: string, participantId: string, paid: boolean) => void;
+  onMerge?: (eventId: string, targetId: string, totalCost: string, maxParticipants: string) => Promise<string | null>;
+  mergeTargets?: UIEvent[];
   onCancel?: (eventId: string) => void;
 }) {
   const isSettled = event.status === "settled";
@@ -712,6 +820,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState(false);
+  const [merging, setMerging] = useState(false);
 
   const update = (patch: Record<string, unknown>) => onUpdate?.(event.id, patch);
 
@@ -776,8 +885,22 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
               {editingSettlement ? "Close charge time" : "⏰ Charge time"}
             </button>
           )}
+          {isAdmin && !isSettled && !isCancelled && onMerge && (
+            <button onClick={() => setMerging((v) => !v)} style={dashBtn}>
+              {merging ? "Close merge" : "🔀 Merge / move"}
+            </button>
+          )}
         </div>
       </div>
+
+      {isAdmin && !isSettled && !isCancelled && merging && onMerge && (
+        <MergePanel
+          event={event}
+          targets={mergeTargets ?? []}
+          onMerge={(targetId, cost, max) => onMerge(event.id, targetId, cost, max)}
+          onClose={() => setMerging(false)}
+        />
+      )}
 
       {isAdmin && !isSettled && editingDetails && (
         <EventDetailsEditor event={event} onUpdate={update} onClose={() => setEditingDetails(false)} />

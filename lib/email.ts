@@ -240,6 +240,77 @@ export async function sendWaitlistMissedEmail(opts: WaitlistMissedEmail): Promis
   }
 }
 
+// ---------- Moved to another session (merge / cancel-and-move) ----------
+export type SessionMovedEmail = {
+  to: string;
+  name: string;
+  fromEventName: string;
+  eventName: string;
+  date?: string | null;
+  time?: string | null;
+  location?: string | null;
+  settlementLabel?: string | null;
+  listType: "confirmed" | "waitlist";
+  withdrawUrl: string;
+  updateCardUrl?: string;
+};
+
+/**
+ * Their session was folded into another one. The date, time, venue and the
+ * amount can all differ from what they signed up for, so this spells out where
+ * they've landed and gives them the same out as any other registration.
+ */
+export async function sendSessionMovedEmail(opts: SessionMovedEmail): Promise<boolean> {
+  if (!transporter) {
+    console.warn(`[email] credentials not set — skipping moved email to ${opts.to}`);
+    return false;
+  }
+  const from = process.env.EMAIL_FROM || `Bball Court Fee <${GMAIL_USER}>`;
+  const confirmed = opts.listType === "confirmed";
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
+    <div style="font-size:20px;font-weight:800;color:#0d9488">Bball Court Fee</div>
+    <h1 style="font-size:18px;margin:16px 0 4px">${confirmed ? "You've been moved to another session ✅" : "You've been moved to another session ⏳"}</h1>
+    <p style="color:#475569;font-size:14px;margin:0 0 16px">Hi ${escapeHtml(opts.name)}, <b>${escapeHtml(opts.fromEventName)}</b> didn't go ahead, so we've moved your registration across. ${confirmed ? "You have a confirmed spot." : "This one is full, so you're on the waitlist — you'll move up if someone drops out."}</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Your session is now</div>
+      <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
+      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(fmtDate(opts.date))}</div>` : ""}
+      ${opts.time ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Time: ${escapeHtml(opts.time)}</div>` : ""}
+      ${opts.location ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Location: ${escapeHtml(opts.location)}</div>` : ""}
+      ${
+        confirmed && opts.settlementLabel
+          ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0">
+               <div style="font-size:13px;color:#64748b">You'll be charged your share at:</div>
+               <div style="font-size:15px;font-weight:700;color:#0d9488;margin-top:2px">${escapeHtml(opts.settlementLabel)}</div>
+               <div style="font-size:12px;color:#94a3b8;margin-top:4px">The cost is split evenly among everyone registered at that time — your share may differ from the session you originally signed up for.</div>
+             </div>`
+          : `<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0">
+               <div style="font-size:13px;color:#64748b">Your card is saved but <b>not charged</b> while you're on the waitlist.</div>
+             </div>`
+      }
+    </div>
+    <div style="margin-top:20px;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:14px">
+      <div style="font-size:13px;color:#991b1b;font-weight:600">Doesn't suit you?</div>
+      <div style="font-size:13px;color:#7f1d1d;margin:6px 0 12px">No problem — withdraw before settlement and you won't be charged.</div>
+      <a href="${opts.withdrawUrl}" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px">Withdraw my registration</a>
+    </div>
+    ${cardBlock(opts.updateCardUrl)}
+  </div>`;
+  try {
+    await transporter.sendMail({
+      from,
+      to: opts.to,
+      subject: `Moved to ${opts.eventName} — ${opts.fromEventName} didn't go ahead`,
+      html,
+    });
+    return true;
+  } catch (err) {
+    console.error("[email] session-moved send failed:", err);
+    return false;
+  }
+}
+
 // ---------- Failed-charge notification ----------
 export type FailedChargeEmail = {
   to: string;

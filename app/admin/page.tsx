@@ -152,6 +152,32 @@ export default function AdminPage() {
     }
   };
 
+  const onMerge = async (
+    eventId: string,
+    targetId: string,
+    totalCost: string,
+    maxParticipants: string
+  ): Promise<string | null> => {
+    notify("info", "Moving people & emailing them…");
+    const res = await fetch(`/api/events/${eventId}/merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetEventId: targetId, totalCost, maxParticipants }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      notify(
+        "success",
+        `Moved to ${data.targetName} — ${data.movedConfirmed} confirmed, ${data.movedWaitlist} waitlisted` +
+          (data.duplicates ? `, ${data.duplicates} duplicate(s) removed` : "") +
+          `, ${data.emailed} emailed`
+      );
+      loadEvents();
+      return null;
+    }
+    return data.error || "Merge failed";
+  };
+
   const onLogout = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
     setAuthed(false);
@@ -210,6 +236,10 @@ export default function AdminPage() {
           onDelete={onDelete}
           onManualAdd={onManualAdd}
           onMarkPaid={onMarkPaid}
+          onMerge={onMerge}
+          mergeTargets={events.filter(
+            (o) => o.id !== e.id && o.status === "open" && o.paymentMode === e.paymentMode
+          )}
           onCancel={onCancel}
         />
       ))}
