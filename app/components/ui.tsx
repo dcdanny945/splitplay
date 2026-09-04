@@ -235,15 +235,54 @@ function ParticipantList({ participants, label, color, onRemove, isAdmin, isSett
               )}
               {isAdmin && p.email && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>{p.email}</span>}
             </div>
-            {canRemove && (
-              <button onClick={() => onRemove(p.id)} style={{ background: "none", border: "1px solid #fecaca", color: "#ef4444", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
-                Remove
-              </button>
-            )}
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {canRemove && <CardLinkButton participantId={p.id} />}
+              {canRemove && (
+                <button onClick={() => onRemove(p.id)} style={{ background: "none", border: "1px solid #fecaca", color: "#ef4444", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
     </div>
+  );
+}
+
+// ---------- Admin: hand someone their change-card link ----------
+// Registrations made before this feature shipped have no link in their
+// confirmation email, so the organiser needs to be able to produce one.
+function CardLinkButton({ participantId }: { participantId: string }) {
+  const [state, setState] = useState<"idle" | "busy" | "copied" | "error">("idle");
+
+  const copy = async () => {
+    setState("busy");
+    try {
+      const res = await fetch("/api/update-card", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.url) throw new Error(d.error || "failed");
+      await navigator.clipboard.writeText(d.url);
+      setState("copied");
+      setTimeout(() => setState("idle"), 2000);
+    } catch {
+      setState("error");
+      setTimeout(() => setState("idle"), 2500);
+    }
+  };
+
+  return (
+    <button
+      onClick={copy}
+      title="Copy this person's personal change-card link"
+      style={{ background: "none", border: "1px solid #a5f3fc", color: "#0e7490", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap" }}
+    >
+      {state === "copied" ? "✓ Copied" : state === "error" ? "Failed" : state === "busy" ? "…" : "💳 Card link"}
+    </button>
   );
 }
 

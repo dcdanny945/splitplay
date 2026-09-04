@@ -3,7 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getConfirmedCount, getNextPosition, chargeFixedPending, type EventRow } from "@/lib/db";
 import { sendConfirmationEmail, sendRegistrationEmail, sendWaitlistEmail } from "@/lib/email";
-import { makeWithdrawToken } from "@/lib/auth";
+import { makeUpdateCardToken, makeWithdrawToken } from "@/lib/auth";
 import { melbourneLabel } from "@/lib/time";
 
 // Stripe needs the raw request body to verify the signature, so we read text().
@@ -33,13 +33,59 @@ export async function POST(req: Request) {
   return Response.json({ received: true });
 }
 
+/**
+ * Points a registration at the card that was just saved. Settlement charges the
+ * stored payment method id, so this write is what actually changes which card
+ * gets billed; the old one is detached so it can't be used again.
+ */
+async function handleCardUpdated(session: Stripe.Checkout.Session, participantId: string) {
+  if (session.mode !== "setup" || !session.setup_intent) return;
+
+  const si = await stripe.setupIntents.retrieve(session.setup_intent as string);
+  const newPm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id ?? null;
+  if (!newPm) return;
+
+  const { data: p } = await supabaseAdmin
+    .from("participants")
+    .select("id, stripe_payment_method_id")
+    .eq("id", participantId)
+    .single();
+  if (!p) return; // withdrawn while the checkout was open
+
+  const oldPm = (p as { stripe_payment_method_id: string | null }).stripe_payment_method_id;
+  if (oldPm === newPm) return;
+
+  const { error } = await supabaseAdmin
+    .from("participants")
+    .update({ stripe_payment_method_id: newPm })
+    .eq("id", participantId);
+  if (error) throw new Error(`could not save new card: ${error.message}`);
+
+  if (oldPm) {
+    try {
+      await stripe.paymentMethods.detach(oldPm);
+    } catch (err) {
+      // Not fatal: the row already points at the new card.
+      console.error("[webhook] could not detach old payment method:", err);
+    }
+  }
+}
+
 async function handleSessionCompleted(session: Stripe.Checkout.Session) {
   const md = session.metadata || {};
+
+  // A card swap reuses the registration's existing Stripe customer, so it has
+  // to be handled before the idempotency check below — that check sees the
+  // customer already on file and would write the session off as a retry.
+  if (md.purpose === "update_card" && md.participant_id) {
+    await handleCardUpdated(session, md.participant_id);
+    return;
+  }
+
   const eventId = md.event_id;
   if (!eventId) return;
 
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
-
   // Idempotency: a customer is created once per registration, so if a row with
   // this customer already exists for the event, this webhook is a retry.
   if (customerId) {
@@ -85,9 +131,10 @@ async function handleSessionCompleted(session: Stripe.Checkout.Session) {
       // Fixed mode + landed in a confirmed slot -> charge immediately.
       await chargeFixedPending(eventId);
     } else if (ev.payment_mode === "split" && inserted && md.email) {
-      // Split mode: personal withdraw link in every email.
+      // Split mode: personal withdraw + change-card links in every email.
       const baseUrl = process.env.NEXT_PUBLIC_URL || "";
       const withdrawUrl = `${baseUrl}/withdraw?token=${makeWithdrawToken(inserted.id)}`;
+      const updateCardUrl = `${baseUrl}/update-card?token=${makeUpdateCardToken(inserted.id)}`;
       if (listType === "confirmed") {
         const settlementLabel = ev.settlement_time
           ? `${melbourneLabel(ev.settlement_time)} (Melbourne)`
@@ -100,6 +147,7 @@ async function handleSessionCompleted(session: Stripe.Checkout.Session) {
           location: ev.location,
           settlementLabel,
           withdrawUrl,
+          updateCardUrl,
         });
       } else {
         await sendWaitlistEmail({
@@ -109,6 +157,7 @@ async function handleSessionCompleted(session: Stripe.Checkout.Session) {
           date: ev.event_date,
           location: ev.location,
           withdrawUrl,
+          updateCardUrl,
         });
       }
     }

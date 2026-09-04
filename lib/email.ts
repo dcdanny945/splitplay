@@ -80,8 +80,20 @@ export type RegistrationEmail = {
   location?: string | null;
   settlementLabel: string; // e.g. "Thu, 18 Jun, 8:00 pm AEST"
   withdrawUrl: string;
+  updateCardUrl?: string;
   promoted?: boolean; // true when moved up from the waitlist
 };
+
+/** Shared block: swap the saved card without giving up the spot. */
+function cardBlock(updateCardUrl?: string): string {
+  if (!updateCardUrl) return "";
+  return `
+    <div style="margin-top:16px;padding:16px;background:#ecfeff;border:1px solid #a5f3fc;border-radius:14px">
+      <div style="font-size:13px;color:#0e7490;font-weight:600">Need to pay with a different card? 💳</div>
+      <div style="font-size:13px;color:#155e75;margin:6px 0 12px">Swap it any time before settlement — you keep your spot.</div>
+      <a href="${updateCardUrl}" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px">Change my card</a>
+    </div>`;
+}
 
 /**
  * Sent right after a card is saved (split mode). Tells the registrant they're in,
@@ -118,7 +130,8 @@ export async function sendRegistrationEmail(opts: RegistrationEmail): Promise<bo
       <div style="font-size:13px;color:#7f1d1d;margin:6px 0 12px">Withdraw before settlement and you won't be charged.</div>
       <a href="${opts.withdrawUrl}" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px">Withdraw my registration</a>
     </div>
-    <p style="color:#94a3b8;font-size:12px;margin-top:20px">Keep this email — it's your personal withdraw link.</p>
+    ${cardBlock(opts.updateCardUrl)}
+    <p style="color:#94a3b8;font-size:12px;margin-top:20px">Keep this email — these links are personal to you.</p>
   </div>`;
 
   try {
@@ -143,6 +156,7 @@ export type WaitlistEmail = {
   date?: string | null;
   location?: string | null;
   withdrawUrl: string;
+  updateCardUrl?: string;
 };
 
 export async function sendWaitlistEmail(opts: WaitlistEmail): Promise<boolean> {
@@ -170,6 +184,7 @@ export async function sendWaitlistEmail(opts: WaitlistEmail): Promise<boolean> {
       <div style="font-size:13px;color:#7f1d1d;margin:6px 0 12px">Leave the waitlist any time:</div>
       <a href="${opts.withdrawUrl}" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px">Leave the waitlist</a>
     </div>
+    ${cardBlock(opts.updateCardUrl)}
   </div>`;
   try {
     await transporter.sendMail({ from, to: opts.to, subject: `You're on the waitlist — ${opts.eventName}`, html });
