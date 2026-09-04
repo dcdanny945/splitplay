@@ -195,6 +195,51 @@ export async function sendWaitlistEmail(opts: WaitlistEmail): Promise<boolean> {
   }
 }
 
+// ---------- Waitlist: settled without getting a spot ----------
+export type WaitlistMissedEmail = {
+  to: string;
+  name: string;
+  eventName: string;
+  date?: string | null;
+  location?: string | null;
+};
+
+/**
+ * Sent at settlement to anyone still on the waitlist. Nobody dropped out, so
+ * they never moved up and were never charged — without this they just never
+ * hear anything back.
+ */
+export async function sendWaitlistMissedEmail(opts: WaitlistMissedEmail): Promise<boolean> {
+  if (!transporter) {
+    console.warn(`[email] credentials not set — skipping waitlist-missed email to ${opts.to}`);
+    return false;
+  }
+  const from = process.env.EMAIL_FROM || `Bball Court Fee <${GMAIL_USER}>`;
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
+    <div style="font-size:20px;font-weight:800;color:#0d9488">Bball Court Fee</div>
+    <h1 style="font-size:18px;margin:16px 0 4px">No spot this time 😔</h1>
+    <p style="color:#475569;font-size:14px;margin:0 0 20px">Hi ${escapeHtml(opts.name)}, nobody dropped out before the cutoff, so you stayed on the waitlist for this one.</p>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:16px;margin:0 0 16px">
+      <p style="color:#065f46;font-size:14px;font-weight:700;margin:0">💳 You have not been charged anything.</p>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Event</div>
+      <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
+      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(fmtDate(opts.date))}</div>` : ""}
+      ${opts.location ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Location: ${escapeHtml(opts.location)}</div>` : ""}
+    </div>
+    <p style="color:#475569;font-size:14px;margin-top:20px">Thanks for putting your name down 🏀 Keep an eye out for the next session — sign up early and you'll be in.</p>
+  </div>`;
+  try {
+    await transporter.sendMail({ from, to: opts.to, subject: `No spot this time — ${opts.eventName}`, html });
+    return true;
+  } catch (err) {
+    console.error("[email] waitlist-missed send failed:", err);
+    return false;
+  }
+}
+
 // ---------- Failed-charge notification ----------
 export type FailedChargeEmail = {
   to: string;

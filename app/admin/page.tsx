@@ -68,7 +68,12 @@ export default function AdminPage() {
     const res = await fetch(`/api/events/${eventId}/settle`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      notify("success", `Settled — ${data.charged} charged${data.failed ? `, ${data.failed} failed` : ""}`);
+      notify(
+        "success",
+        `Settled — ${data.charged} charged` +
+          (data.failed ? `, ${data.failed} failed` : "") +
+          (data.missed ? `, ${data.missed} waitlisters notified` : "")
+      );
       loadEvents();
     } else {
       notify("error", data.error || "Settle failed");

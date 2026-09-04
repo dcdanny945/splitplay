@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     .lte("settlement_time", new Date().toISOString());
 
   let settled = 0;
-  const details: Array<{ id: string; charged: number; failed: number }> = [];
+  const details: Array<{ id: string; charged: number; failed: number; missed: number }> = [];
   for (const e of (events ?? []) as EventRow[]) {
     const r = await settleEvent(e);
     details.push({ id: e.id, ...r });

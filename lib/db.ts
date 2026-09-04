@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { stripe } from "./stripe";
 import { calcCharge, type PaymentMode } from "./pricing";
-import { sendConfirmationEmail, sendFailedChargeEmail, sendRegistrationEmail } from "./email";
+import { sendConfirmationEmail, sendFailedChargeEmail, sendRegistrationEmail, sendWaitlistMissedEmail } from "./email";
 import { makeWithdrawToken } from "./auth";
 import { melbourneLabel } from "./time";
 
@@ -233,7 +233,9 @@ async function chargeParticipant(
  *  - Keep going until each slot is filled with a successful charge or the
  *    waitlist runs out, then mark the event settled.
  */
-export async function settleEvent(event: EventRow): Promise<{ charged: number; failed: number }> {
+export async function settleEvent(
+  event: EventRow
+): Promise<{ charged: number; failed: number; missed: number }> {
   const { data: confData } = await supabaseAdmin
     .from("participants")
     .select("*")
@@ -291,7 +293,38 @@ export async function settleEvent(event: EventRow): Promise<{ charged: number; f
   }
 
   await supabaseAdmin.from("events").update({ status: "settled" }).eq("id", event.id);
-  return { charged, failed };
+  // Status first, emails second: a mail failure must never leave the event
+  // looking unsettled, which would let the cron charge everyone again.
+  const missed = await notifyRemainingWaitlist(event);
+  return { charged, failed, missed };
+}
+
+/**
+ * Anyone still on the waitlist when the event settles never moved up and was
+ * never charged. Without this they hear nothing at all after signing up.
+ */
+async function notifyRemainingWaitlist(event: EventRow): Promise<number> {
+  const { data } = await supabaseAdmin
+    .from("participants")
+    .select("*")
+    .eq("event_id", event.id)
+    .eq("list_type", "waitlist")
+    .neq("charge_status", "charged")
+    .order("position", { ascending: true });
+
+  let notified = 0;
+  for (const w of (data ?? []) as ParticipantRow[]) {
+    if (!w.email) continue;
+    const sent = await sendWaitlistMissedEmail({
+      to: w.email,
+      name: w.name,
+      eventName: event.name,
+      date: event.event_date,
+      location: event.location,
+    });
+    if (sent) notified++;
+  }
+  return notified;
 }
 
 /**
