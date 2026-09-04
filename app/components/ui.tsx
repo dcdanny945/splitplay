@@ -13,6 +13,8 @@ export type UIParticipant = {
   email?: string;
   chargeStatus?: "pending" | "charged" | "failed";
   amountCharged?: number;
+  /** Paid off-platform (bank transfer/cash) — no Stripe charge behind it. */
+  manuallyPaid?: boolean;
 };
 
 export type UIEvent = {
@@ -209,9 +211,11 @@ function ProgressBar({ current, max }: { current: number; max: number }) {
 }
 
 // ---------- Participant list ----------
-function ParticipantList({ participants, label, color, onRemove, isAdmin, isSettled }: {
+function ParticipantList({ participants, label, color, onRemove, onMarkPaid, isAdmin, isSettled }: {
   participants: UIParticipant[]; label: string; color: string;
-  onRemove: (id: string) => void; isAdmin: boolean; isSettled: boolean;
+  onRemove: (id: string) => void;
+  onMarkPaid?: (participantId: string, paid: boolean) => void;
+  isAdmin: boolean; isSettled: boolean;
 }) {
   if (participants.length === 0) return null;
   return (
@@ -236,6 +240,24 @@ function ParticipantList({ participants, label, color, onRemove, isAdmin, isSett
               {isAdmin && p.email && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>{p.email}</span>}
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {isAdmin && onMarkPaid && !p.paid && (
+                <button
+                  onClick={() => onMarkPaid(p.id, true)}
+                  title="They paid you directly (bank transfer/cash) — skip their card at settlement"
+                  style={{ background: "none", border: "1px solid #86efac", color: "#047857", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                >
+                  ✓ Mark paid
+                </button>
+              )}
+              {isAdmin && onMarkPaid && p.manuallyPaid && (
+                <button
+                  onClick={() => onMarkPaid(p.id, false)}
+                  title="Undo — put them back to pending so their card is charged at settlement"
+                  style={{ background: "none", border: "1px solid #e2e8f0", color: "#64748b", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                >
+                  Undo
+                </button>
+              )}
               {canRemove && <CardLinkButton participantId={p.id} />}
               {canRemove && (
                 <button onClick={() => onRemove(p.id)} style={{ background: "none", border: "1px solid #fecaca", color: "#ef4444", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
@@ -666,7 +688,7 @@ function SettlementEditor({ event, onUpdate, onClose }: {
 }
 
 // ---------- Event card ----------
-export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd, onCancel }: {
+export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd, onMarkPaid, onCancel }: {
   event: UIEvent;
   isAdmin: boolean;
   onRegister?: (eventId: string, name: string, email: string) => Promise<string | null>;
@@ -675,6 +697,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
   onSettle?: (eventId: string) => void;
   onDelete?: (eventId: string) => void;
   onManualAdd?: (eventId: string, name: string, email: string) => Promise<string | null>;
+  onMarkPaid?: (eventId: string, participantId: string, paid: boolean) => void;
   onCancel?: (eventId: string) => void;
 }) {
   const isSettled = event.status === "settled";
@@ -772,8 +795,8 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
 
       {!isSettled && !isFixed && event.cutoffTime && <CountdownTimer cutoffTime={event.cutoffTime} />}
 
-      <ParticipantList participants={event.participants} label="Confirmed" color="#0d9488" onRemove={(id) => onRemove?.(id)} isAdmin={isAdmin} isSettled={isSettled} />
-      <ParticipantList participants={event.waitlist} label="Waitlist" color="#f59e0b" onRemove={(id) => onRemove?.(id)} isAdmin={isAdmin} isSettled={isSettled} />
+      <ParticipantList participants={event.participants} label="Confirmed" color="#0d9488" onRemove={(id) => onRemove?.(id)} onMarkPaid={onMarkPaid && ((pid, paid) => onMarkPaid(event.id, pid, paid))} isAdmin={isAdmin} isSettled={isSettled} />
+      <ParticipantList participants={event.waitlist} label="Waitlist" color="#f59e0b" onRemove={(id) => onRemove?.(id)} onMarkPaid={onMarkPaid && ((pid, paid) => onMarkPaid(event.id, pid, paid))} isAdmin={isAdmin} isSettled={isSettled} />
 
       {!isAdmin && !isSettled && !settlementPassed && onRegister && (
         <RegistrationForm event={event} onRegister={(name, email) => onRegister(event.id, name, email)} />

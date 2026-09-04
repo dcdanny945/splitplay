@@ -142,6 +142,10 @@ function serializeParticipant(p: ParticipantRow, admin: boolean) {
     email: admin ? p.email : undefined,
     chargeStatus: admin ? p.charge_status : undefined,
     amountCharged: admin && p.amount_charged != null ? Number(p.amount_charged) : undefined,
+    // Paid off-platform (bank transfer, cash): marked charged with no Stripe
+    // payment behind it. Only those can be un-marked — undoing a real Stripe
+    // charge would need a refund, not a status flip.
+    manuallyPaid: admin ? p.charge_status === "charged" && !p.stripe_payment_intent_id : undefined,
   };
 }
 

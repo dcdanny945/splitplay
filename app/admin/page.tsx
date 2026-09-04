@@ -132,6 +132,21 @@ export default function AdminPage() {
     return data.error || "Failed to add";
   };
 
+  const onMarkPaid = async (eventId: string, participantId: string, paid: boolean) => {
+    const res = await fetch(`/api/events/${eventId}/manual`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ participantId, paid }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      notify("success", paid ? "Marked as paid — they won't be charged at settlement" : "Payment mark cleared");
+      loadEvents();
+    } else {
+      notify("error", data.error || "Could not update payment status");
+    }
+  };
+
   const onLogout = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
     setAuthed(false);
@@ -189,6 +204,7 @@ export default function AdminPage() {
           onSettle={onSettle}
           onDelete={onDelete}
           onManualAdd={onManualAdd}
+          onMarkPaid={onMarkPaid}
           onCancel={onCancel}
         />
       ))}
