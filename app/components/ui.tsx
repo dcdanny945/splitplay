@@ -12,6 +12,8 @@ export type UIParticipant = {
   paid: boolean;
   email?: string;
   chargeStatus?: "pending" | "charged" | "failed";
+  /** Who they said they know in the group, asked at sign-up. */
+  referredBy?: string;
   amountCharged?: number;
   /** Paid off-platform (bank transfer/cash) — no Stripe charge behind it. */
   manuallyPaid?: boolean;
@@ -238,6 +240,9 @@ function ParticipantList({ participants, label, color, onRemove, onMarkPaid, isA
                 <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "#92400e", background: "#fef3c7", padding: "2px 8px", borderRadius: 99 }}>Pending</span>
               )}
               {isAdmin && p.email && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>{p.email}</span>}
+              {isAdmin && p.referredBy && (
+                <span style={{ color: "#0e7490", marginLeft: 8, fontSize: 12 }}>🤝 {p.referredBy}</span>
+              )}
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               {isAdmin && onMarkPaid && !p.paid && (
@@ -415,16 +420,18 @@ function CardLinkButton({ participantId }: { participantId: string }) {
 }
 
 // ---------- Registration form ----------
-function RegistrationForm({ event, onRegister }: { event: UIEvent; onRegister: (name: string, email: string) => Promise<string | null> }) {
+function RegistrationForm({ event, onRegister }: { event: UIEvent; onRegister: (name: string, email: string, referredBy: string) => Promise<string | null> }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
-  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean }>({});
+  const [referredBy, setReferredBy] = useState("");
+  const [errors, setErrors] = useState<{ name?: string; email?: string; referredBy?: string }>({});
+  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; referredBy?: boolean }>({});
   const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
-    const e: { name?: string; email?: string } = {};
+    const e: { name?: string; email?: string; referredBy?: string } = {};
     if (!name.trim()) e.name = "Name is required";
+    if (!referredBy.trim()) e.referredBy = "Please tell us who you know here";
     if (!email.trim()) e.email = "Email is required";
     else {
       const check = isValidEmail(email.trim());
@@ -436,10 +443,10 @@ function RegistrationForm({ event, onRegister }: { event: UIEvent; onRegister: (
   const handleSubmit = async () => {
     const e = validate();
     setErrors(e);
-    setTouched({ name: true, email: true });
+    setTouched({ name: true, email: true, referredBy: true });
     if (Object.keys(e).length > 0) return;
     setSubmitting(true);
-    const err = await onRegister(name.trim(), email.trim());
+    const err = await onRegister(name.trim(), email.trim(), referredBy.trim());
     if (err) {
       setSubmitting(false);
       setErrors({ email: err });
@@ -490,6 +497,19 @@ function RegistrationForm({ event, onRegister }: { event: UIEvent; onRegister: (
           ) : (
             <div style={{ fontSize: 11, color: "#0e7490", marginTop: 4 }}>
               📧 Your confirmation email is sent here — please double-check it&apos;s correct.
+            </div>
+          )}
+        </div>
+        <div>
+          <input type="text" placeholder="Who do you know here? (e.g. Danny)" value={referredBy}
+            onChange={(e) => setReferredBy(e.target.value)}
+            onBlur={() => { setTouched({ ...touched, referredBy: true }); setErrors(validate()); }}
+            style={{ ...inputBase, border: `2px solid ${touched.referredBy && errors.referredBy ? "#ef4444" : "#e2e8f0"}` }} />
+          {touched.referredBy && errors.referredBy ? (
+            <div style={errStyle}>{errors.referredBy}</div>
+          ) : (
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+              🤝 Just so we know who&apos;s who on the day.
             </div>
           )}
         </div>
@@ -797,7 +817,7 @@ function SettlementEditor({ event, onUpdate, onClose }: {
 export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSettle, onDelete, onManualAdd, onMarkPaid, onMerge, mergeTargets, onCancel }: {
   event: UIEvent;
   isAdmin: boolean;
-  onRegister?: (eventId: string, name: string, email: string) => Promise<string | null>;
+  onRegister?: (eventId: string, name: string, email: string, referredBy: string) => Promise<string | null>;
   onRemove?: (participantId: string) => void;
   onUpdate?: (eventId: string, patch: Record<string, unknown>) => void;
   onSettle?: (eventId: string) => void;
@@ -922,7 +942,7 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
       <ParticipantList participants={event.waitlist} label="Waitlist" color="#f59e0b" onRemove={(id) => onRemove?.(id)} onMarkPaid={onMarkPaid && ((pid, paid) => onMarkPaid(event.id, pid, paid))} isAdmin={isAdmin} isSettled={isSettled} />
 
       {!isAdmin && !isSettled && !settlementPassed && onRegister && (
-        <RegistrationForm event={event} onRegister={(name, email) => onRegister(event.id, name, email)} />
+        <RegistrationForm event={event} onRegister={(name, email, referredBy) => onRegister(event.id, name, email, referredBy)} />
       )}
 
       {!isAdmin && !isSettled && settlementPassed && (

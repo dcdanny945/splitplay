@@ -10,10 +10,13 @@ const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 // Creates a Stripe Checkout Session and returns its URL. The participant row is
 // only written once Stripe confirms, via the webhook.
 export async function POST(req: Request) {
-  const { eventId, name, email } = await req.json().catch(() => ({}));
+  const { eventId, name, email, referredBy } = await req.json().catch(() => ({}));
 
   if (!eventId || !name || !email) {
     return NextResponse.json({ error: "Missing eventId, name or email" }, { status: 400 });
+  }
+  if (!referredBy || !String(referredBy).trim()) {
+    return NextResponse.json({ error: "Please tell us who you know here" }, { status: 400 });
   }
   if (!EMAIL_RE.test(String(email).trim())) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 });
@@ -45,6 +48,8 @@ export async function POST(req: Request) {
   const baseUrl = process.env.NEXT_PUBLIC_URL || new URL(req.url).origin;
   const cleanName = String(name).trim();
   const cleanEmail = String(email).trim();
+  // Stripe caps metadata values at 500 chars.
+  const cleanReferredBy = String(referredBy).trim().slice(0, 200);
 
   // Pass event name + date to the success page so it can greet the registrant.
   const successUrl =
@@ -60,6 +65,7 @@ export async function POST(req: Request) {
     email: cleanEmail,
     list_type: listType,
     payment_mode: ev.payment_mode,
+    referred_by: cleanReferredBy,
   };
 
   try {

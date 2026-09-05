@@ -92,11 +92,11 @@ export default function UserPage() {
 
   const activeEvent = events.find((e) => e.id === activeId) ?? events[0] ?? null;
 
-  const onRegister = async (eventId: string, name: string, email: string): Promise<string | null> => {
+  const onRegister = async (eventId: string, name: string, email: string, referredBy: string): Promise<string | null> => {
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId, name, email }),
+      body: JSON.stringify({ eventId, name, email, referredBy }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return data.error || "Registration failed";

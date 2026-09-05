@@ -30,6 +30,7 @@ export type ParticipantRow = {
   email: string;
   stripe_customer_id: string | null;
   stripe_payment_method_id: string | null;
+  referred_by: string | null;
   list_type: "confirmed" | "waitlist";
   position: number;
   registered_at: string;
@@ -141,6 +142,7 @@ function serializeParticipant(p: ParticipantRow, admin: boolean) {
     // Admin-only details:
     email: admin ? p.email : undefined,
     chargeStatus: admin ? p.charge_status : undefined,
+    referredBy: admin ? p.referred_by ?? undefined : undefined,
     amountCharged: admin && p.amount_charged != null ? Number(p.amount_charged) : undefined,
     // Paid off-platform (bank transfer, cash): marked charged with no Stripe
     // payment behind it. Only those can be un-marked — undoing a real Stripe

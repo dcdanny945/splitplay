@@ -45,6 +45,8 @@ create table if not exists participants (
   registered_at timestamptz default now(),
   charge_status text not null default 'pending'
     check (charge_status in ('pending','charged','failed')),
+  -- who the registrant said they know in the group (asked at sign-up)
+  referred_by text,
   stripe_payment_intent_id text,
   amount_charged numeric(10,2),
   email_sent boolean not null default false
