@@ -876,7 +876,9 @@ export function EventCard({ event, isAdmin, onRegister, onRemove, onUpdate, onSe
               {isFixed ? "Pay at registration" : "Auto-charge at settlement"}
             </div>
           )}
-          {isAdmin && !isSettled && (
+          {/* Settled sessions stay on the register page until their date passes,
+              so the organiser still needs to be able to take one down early. */}
+          {isAdmin && !isCancelled && (
             <button
               onClick={() => update({ visible: !event.visible })}
               title={event.visible ? "Visible to registrants — click to hide" : "Hidden from registrants — click to show"}
