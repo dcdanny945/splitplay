@@ -35,6 +35,19 @@ body {
   }
 }
 
+/* Admin participant rows: on a phone the name and the action buttons fight
+   over the same line, so the buttons drop to their own row underneath. */
+@media (max-width: 640px) {
+  .participant-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+
+  .participant-actions {
+    width: 100%;
+  }
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;

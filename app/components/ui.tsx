@@ -229,7 +229,7 @@ function ParticipantList({ participants, label, color, onRemove, onMarkPaid, isA
       {participants.map((p, i) => {
         const canRemove = !isSettled && isAdmin;
         return (
-          <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: i % 2 === 0 ? "#f8fafc" : "#fff", borderRadius: 10, marginBottom: 4, fontSize: 14, border: "1px solid transparent" }}>
+          <div key={p.id} className="participant-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "10px 14px", background: i % 2 === 0 ? "#f8fafc" : "#fff", borderRadius: 10, marginBottom: 4, fontSize: 14, border: "1px solid transparent" }}>
             <div style={{ minWidth: 0, overflow: "hidden", display: "flex", alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ fontWeight: 600, color: "#1e293b" }}>{i + 1}. {p.name}</span>
               {p.paid ? (
@@ -241,10 +241,10 @@ function ParticipantList({ participants, label, color, onRemove, onMarkPaid, isA
               )}
               {isAdmin && p.email && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>{p.email}</span>}
               {isAdmin && p.referredBy && (
-                <span style={{ color: "#0e7490", marginLeft: 8, fontSize: 12 }}>🤝 {p.referredBy}</span>
+                <span style={{ color: "#0e7490", marginLeft: 8, fontSize: 12 }}>🤝 <b>{p.referredBy}</b></span>
               )}
             </div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <div className="participant-actions" style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
               {isAdmin && onMarkPaid && !p.paid && (
                 <button
                   onClick={() => onMarkPaid(p.id, true)}
