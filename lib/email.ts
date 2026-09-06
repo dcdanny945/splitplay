@@ -311,6 +311,61 @@ export async function sendSessionMovedEmail(opts: SessionMovedEmail): Promise<bo
   }
 }
 
+// ---------- Bumped from a confirmed spot back to the waitlist ----------
+export type MovedToWaitlistEmail = {
+  to: string;
+  name: string;
+  eventName: string;
+  date?: string | null;
+  location?: string | null;
+  withdrawUrl: string;
+  updateCardUrl?: string;
+};
+
+/**
+ * The organiser cut the number of spots, so the last people to sign up lost
+ * theirs. They were told they were in, so this has to be unambiguous: no charge
+ * has happened, and they're first in line if someone drops out.
+ */
+export async function sendMovedToWaitlistEmail(opts: MovedToWaitlistEmail): Promise<boolean> {
+  if (!transporter) {
+    console.warn(`[email] credentials not set — skipping moved-to-waitlist email to ${opts.to}`);
+    return false;
+  }
+  const from = process.env.EMAIL_FROM || `Bball Court Fee <${GMAIL_USER}>`;
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
+    <div style="font-size:20px;font-weight:800;color:#0d9488">Bball Court Fee</div>
+    <h1 style="font-size:18px;margin:16px 0 4px">You've moved to the waitlist ⏳</h1>
+    <p style="color:#475569;font-size:14px;margin:0 0 16px">Hi ${escapeHtml(opts.name)}, sorry — the number of spots for this session had to be reduced, so the last few sign-ups have moved to the waitlist.</p>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:16px;margin:0 0 16px">
+      <p style="color:#065f46;font-size:14px;font-weight:700;margin:0">💳 You have not been charged, and won't be while you're on the waitlist.</p>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Event</div>
+      <div style="font-size:16px;font-weight:700;margin-top:2px">${escapeHtml(opts.eventName)}</div>
+      ${opts.date ? `<div style="font-size:13px;color:#64748b;margin-top:8px">Date: ${escapeHtml(fmtDate(opts.date))}</div>` : ""}
+      ${opts.location ? `<div style="font-size:13px;color:#64748b;margin-top:2px">Location: ${escapeHtml(opts.location)}</div>` : ""}
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;margin-top:16px">
+      <p style="color:#1e40af;font-size:13px;margin:0;font-weight:600">If someone withdraws before settlement you'll move straight back up, and we'll email you to confirm.</p>
+    </div>
+    <div style="margin-top:20px;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:14px">
+      <div style="font-size:13px;color:#991b1b;font-weight:600">Don't want to wait?</div>
+      <div style="font-size:13px;color:#7f1d1d;margin:6px 0 12px">Leave the waitlist any time:</div>
+      <a href="${opts.withdrawUrl}" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px">Leave the waitlist</a>
+    </div>
+    ${cardBlock(opts.updateCardUrl)}
+  </div>`;
+  try {
+    await transporter.sendMail({ from, to: opts.to, subject: `Moved to the waitlist — ${opts.eventName}`, html });
+    return true;
+  } catch (err) {
+    console.error("[email] moved-to-waitlist send failed:", err);
+    return false;
+  }
+}
+
 // ---------- Failed-charge notification ----------
 export type FailedChargeEmail = {
   to: string;

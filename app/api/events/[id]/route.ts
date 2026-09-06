@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { serializeEvent, promoteWaitlist, deleteStripeCustomersForEvent, type EventRow, type ParticipantRow } from "@/lib/db";
+import { serializeEvent, promoteWaitlist, demoteOverflowToWaitlist, deleteStripeCustomersForEvent, type EventRow, type ParticipantRow } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { sanitizeNote } from "@/lib/sanitize";
 import { nextThursday8pmMelbourne, nextWeekdayTimeMelbourne, WEEKDAY_NUM } from "@/lib/time";
@@ -52,10 +52,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
     patch.max_waitlist = Math.max(0, Math.min(100, Number(body.max_waitlist) || 0));
   }
 
-  let raisedMax = false;
+  let maxChanged = false;
   if (body.max_participants !== undefined) {
     patch.max_participants = Math.max(1, Math.min(500, Number(body.max_participants) || 1));
-    raisedMax = true;
+    maxChanged = true;
   }
 
   if (Object.keys(patch).length === 0) {
@@ -73,10 +73,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const { data, error } = await supabaseAdmin.from("events").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Raising the cap may open slots for waitlisters.
-  if (raisedMax) await promoteWaitlist(id);
+  // A new cap cuts both ways: raising it pulls waitlisters up, lowering it
+  // pushes the last sign-ups back down (and emails them).
+  let overflow = { demoted: 0, emailed: 0, keptCharged: 0 };
+  if (maxChanged) {
+    await promoteWaitlist(id);
+    overflow = await demoteOverflowToWaitlist(id);
+  }
 
-  return NextResponse.json({ event: data });
+  return NextResponse.json({ event: data, ...overflow });
 }
 
 // DELETE /api/events/:id  (admin) — cascade-deletes participants

@@ -287,10 +287,17 @@ function MergePanel({ event, targets, onMerge, onClose }: {
   onMerge: (targetId: string, totalCost: string, maxParticipants: string) => Promise<string | null>;
   onClose: () => void;
 }) {
+  const moving = event.participants.length + event.waitlist.length;
+  // Where the moved people land is decided by the target's max spots, so the
+  // choice is offered directly rather than leaving it to be inferred from a
+  // number field: "confirmed" raises the cap to fit them, "waitlist" leaves it.
+  const seatedMax = (t: UIEvent | undefined) => String((t?.participants.length ?? 0) + moving);
+
   const [targetId, setTargetId] = useState(targets[0]?.id ?? "");
   const target = targets.find((t) => t.id === targetId);
+  const [landing, setLanding] = useState<"confirmed" | "waitlist">("confirmed");
   const [cost, setCost] = useState(String(target?.totalCost ?? ""));
-  const [max, setMax] = useState(String(target?.maxParticipants ?? ""));
+  const [max, setMax] = useState(seatedMax(targets[0]));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -298,10 +305,13 @@ function MergePanel({ event, targets, onMerge, onClose }: {
     const t = targets.find((x) => x.id === id);
     setTargetId(id);
     setCost(String(t?.totalCost ?? ""));
-    setMax(String(t?.maxParticipants ?? ""));
+    setMax(landing === "confirmed" ? seatedMax(t) : String(t?.maxParticipants ?? ""));
   };
 
-  const moving = event.participants.length + event.waitlist.length;
+  const pickLanding = (choice: "confirmed" | "waitlist") => {
+    setLanding(choice);
+    setMax(choice === "confirmed" ? seatedMax(target) : String(target?.maxParticipants ?? ""));
+  };
   const maxNum = Number(max);
   const spotsFree = target ? Math.max(0, (Number.isFinite(maxNum) ? maxNum : target.maxParticipants) - target.participants.length) : 0;
   const willConfirm = Math.min(moving, spotsFree);
@@ -347,6 +357,36 @@ function MergePanel({ event, targets, onMerge, onClose }: {
         ))}
       </select>
 
+      <label style={{ ...lbl, marginTop: 14 }}>Where do the {moving} people land?</label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <button
+          onClick={() => pickLanding("confirmed")}
+          style={{
+            padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+            border: landing === "confirmed" ? "2px solid #0d9488" : "2px solid #e2e8f0",
+            background: landing === "confirmed" ? "#ecfeff" : "#fff",
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 700, color: landing === "confirmed" ? "#0e7490" : "#475569" }}>Confirmed spots</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+            Raises {target?.name?.slice(0, 14) ?? "the session"} to {seatedMax(target)} spots
+          </div>
+        </button>
+        <button
+          onClick={() => pickLanding("waitlist")}
+          style={{
+            padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+            border: landing === "waitlist" ? "2px solid #f59e0b" : "2px solid #e2e8f0",
+            background: landing === "waitlist" ? "#fffbeb" : "#fff",
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 700, color: landing === "waitlist" ? "#b45309" : "#475569" }}>Waitlist</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+            Keeps its {target?.maxParticipants ?? 0} spots — they fill in if someone drops
+          </div>
+        </button>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
         <div>
           <label style={lbl}>Total cost of {target?.name?.slice(0, 18) ?? "target"} ($)</label>
@@ -358,12 +398,17 @@ function MergePanel({ event, targets, onMerge, onClose }: {
         </div>
       </div>
       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
-        Prefilled with the target&apos;s current settings — change them if the merged group is paying for a different booking.
+        Set by the choice above — override either number if the merged group is paying for a different booking.
       </div>
 
       <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "#ecfeff", border: "1px solid #a5f3fc", fontSize: 12, color: "#0e7490", lineHeight: 1.6 }}>
         <b>{willConfirm}</b> will get a confirmed spot, <b>{willWait}</b> will go to the waitlist
         {willWait > 0 && <span> (the waitlist cap is raised to fit them)</span>}.
+        {!!target && target.waitlist.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            {target.name.slice(0, 20)} already has <b>{target.waitlist.length}</b> on its waitlist — they keep their place and stay there.
+          </div>
+        )}
         {perHead && <div style={{ marginTop: 4 }}>Split then works out around <b>${perHead}</b> each before the Stripe fee.</div>}
         <div style={{ marginTop: 4 }}>Everyone moved keeps their saved card and gets an email explaining the change.</div>
       </div>

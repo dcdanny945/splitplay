@@ -45,8 +45,19 @@ export default function AdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      notify("info", "Event updated");
+      if (data.demoted) {
+        notify(
+          "info",
+          `Event updated — ${data.demoted} moved to the waitlist, ${data.emailed} emailed` +
+            (data.keptCharged ? ` (${data.keptCharged} already charged, left in place)` : "")
+        );
+      } else if (data.keptCharged) {
+        notify("info", `Event updated — over the cap, but the extra people are already charged so they kept their spot`);
+      } else {
+        notify("info", "Event updated");
+      }
       loadEvents();
     } else {
       notify("error", "Update failed");

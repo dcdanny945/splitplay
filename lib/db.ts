@@ -1,8 +1,8 @@
 import { supabaseAdmin } from "./supabase";
 import { stripe } from "./stripe";
 import { calcCharge, type PaymentMode } from "./pricing";
-import { sendConfirmationEmail, sendFailedChargeEmail, sendRegistrationEmail, sendWaitlistMissedEmail } from "./email";
-import { makeWithdrawToken } from "./auth";
+import { sendConfirmationEmail, sendFailedChargeEmail, sendMovedToWaitlistEmail, sendRegistrationEmail, sendWaitlistMissedEmail } from "./email";
+import { makeUpdateCardToken, makeWithdrawToken } from "./auth";
 import { melbourneLabel } from "./time";
 
 // ---------- Row types ----------
@@ -358,6 +358,84 @@ export async function chargeFixedPending(eventId: string): Promise<void> {
  * Promote waitlisters into newly opened confirmed slots (used after an admin
  * raises max_participants). For fixed events, promoted people are then charged.
  */
+/**
+ * Mirror of promoteWaitlist for when the cap is *lowered*: the people beyond it
+ * lose their confirmed spot. Last to sign up goes first, and anyone already
+ * charged is left alone — their money is taken, so the spot is theirs. If that
+ * leaves the list over the cap, the caller is told rather than the charge being
+ * quietly reversed.
+ */
+export async function demoteOverflowToWaitlist(
+  eventId: string
+): Promise<{ demoted: number; emailed: number; keptCharged: number }> {
+  const none = { demoted: 0, emailed: 0, keptCharged: 0 };
+  const { data: event } = await supabaseAdmin.from("events").select("*").eq("id", eventId).single();
+  if (!event) return none;
+  const ev = event as EventRow;
+
+  const { data } = await supabaseAdmin
+    .from("participants")
+    .select("*")
+    .eq("event_id", eventId)
+    .eq("list_type", "confirmed")
+    .order("position", { ascending: true });
+  const confirmed = (data ?? []) as ParticipantRow[];
+
+  let overflow = confirmed.length - ev.max_participants;
+  if (overflow <= 0) return none;
+
+  // Walk back from the most recent sign-up, skipping anyone already charged.
+  const moving: ParticipantRow[] = [];
+  let keptCharged = 0;
+  for (let i = confirmed.length - 1; i >= 0 && overflow > 0; i--) {
+    const p = confirmed[i];
+    if (p.charge_status === "charged") {
+      keptCharged++;
+      continue;
+    }
+    moving.push(p);
+    overflow--;
+  }
+  if (moving.length === 0) return { ...none, keptCharged };
+
+  // Put them on the waitlist in their original order, so the person who signed
+  // up first is also first in line to come back.
+  moving.reverse();
+  let nextPos = await getNextPosition(eventId, "waitlist");
+  const baseUrl = process.env.NEXT_PUBLIC_URL || "";
+  let emailed = 0;
+
+  for (const p of moving) {
+    const { error } = await supabaseAdmin
+      .from("participants")
+      .update({ list_type: "waitlist", position: nextPos++ })
+      .eq("id", p.id);
+    if (error) {
+      console.error(`[demote] could not move participant ${p.id}:`, error);
+      continue;
+    }
+    if (!p.email) continue;
+    const sent = await sendMovedToWaitlistEmail({
+      to: p.email,
+      name: p.name,
+      eventName: ev.name,
+      date: ev.event_date,
+      location: ev.location,
+      withdrawUrl: `${baseUrl}/withdraw?token=${makeWithdrawToken(p.id)}`,
+      updateCardUrl: `${baseUrl}/update-card?token=${makeUpdateCardToken(p.id)}`,
+    });
+    if (sent) emailed++;
+  }
+
+  // Don't turn anyone away over a waitlist cap they had no say in.
+  const waitlistTotal = await getWaitlistCount(eventId);
+  if (waitlistTotal > ev.max_waitlist) {
+    await supabaseAdmin.from("events").update({ max_waitlist: waitlistTotal }).eq("id", eventId);
+  }
+
+  return { demoted: moving.length, emailed, keptCharged };
+}
+
 export async function promoteWaitlist(eventId: string): Promise<void> {
   const { data: event } = await supabaseAdmin.from("events").select("*").eq("id", eventId).single();
   if (!event) return;
