@@ -75,13 +75,20 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   // A new cap cuts both ways: raising it pulls waitlisters up, lowering it
   // pushes the last sign-ups back down (and emails them).
+  let promotion = { promoted: 0, emailed: 0 };
   let overflow = { demoted: 0, emailed: 0, keptCharged: 0 };
   if (maxChanged) {
-    await promoteWaitlist(id);
+    promotion = await promoteWaitlist(id);
     overflow = await demoteOverflowToWaitlist(id);
   }
 
-  return NextResponse.json({ event: data, ...overflow });
+  return NextResponse.json({
+    event: data,
+    ...overflow,
+    promoted: promotion.promoted,
+    // Only one direction can happen per update, so one count is always zero.
+    emailed: overflow.emailed + promotion.emailed,
+  });
 }
 
 // DELETE /api/events/:id  (admin) — cascade-deletes participants

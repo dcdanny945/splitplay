@@ -47,7 +47,9 @@ export default function AdminPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      if (data.demoted) {
+      if (data.promoted) {
+        notify("success", `Event updated — ${data.promoted} promoted from the waitlist, ${data.emailed} emailed`);
+      } else if (data.demoted) {
         notify(
           "info",
           `Event updated — ${data.demoted} moved to the waitlist, ${data.emailed} emailed` +

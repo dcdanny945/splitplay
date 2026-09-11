@@ -436,14 +436,15 @@ export async function demoteOverflowToWaitlist(
   return { demoted: moving.length, emailed, keptCharged };
 }
 
-export async function promoteWaitlist(eventId: string): Promise<void> {
+export async function promoteWaitlist(eventId: string): Promise<{ promoted: number; emailed: number }> {
+  const none = { promoted: 0, emailed: 0 };
   const { data: event } = await supabaseAdmin.from("events").select("*").eq("id", eventId).single();
-  if (!event) return;
+  if (!event) return none;
   const ev = event as EventRow;
 
   const confirmedCount = await getConfirmedCount(eventId);
   let slots = ev.max_participants - confirmedCount;
-  if (slots <= 0) return;
+  if (slots <= 0) return none;
 
   const { data } = await supabaseAdmin
     .from("participants")
@@ -454,17 +455,47 @@ export async function promoteWaitlist(eventId: string): Promise<void> {
     .limit(slots);
   const waiters = (data ?? []) as ParticipantRow[];
 
+  const baseUrl = process.env.NEXT_PUBLIC_URL || "";
+  const settlementLabel = ev.settlement_time ? `${melbourneLabel(ev.settlement_time)} (Melbourne)` : "settlement time";
+  let promoted = 0;
+  let emailed = 0;
+
   for (const w of waiters) {
     if (slots <= 0) break;
     const pos = await getNextPosition(eventId, "confirmed");
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("participants")
       .update({ list_type: "confirmed", position: pos })
       .eq("id", w.id);
+    if (error) {
+      console.error(`[promote] could not promote participant ${w.id}:`, error);
+      continue;
+    }
     slots--;
+    promoted++;
+
+    // Being moved off the waitlist is news — without this the first they'd hear
+    // of it is the charge. Fixed-mode events email from chargeFixedPending
+    // below instead, once the money is actually taken.
+    if (ev.payment_mode === "split" && w.email) {
+      const sent = await sendRegistrationEmail({
+        to: w.email,
+        name: w.name,
+        eventName: ev.name,
+        date: ev.event_date,
+        location: ev.location,
+        settlementLabel,
+        withdrawUrl: `${baseUrl}/withdraw?token=${makeWithdrawToken(w.id)}`,
+        updateCardUrl: `${baseUrl}/update-card?token=${makeUpdateCardToken(w.id)}`,
+        promoted: true,
+      });
+      if (sent) emailed++;
+    }
   }
 
   if (ev.payment_mode === "fixed") {
     await chargeFixedPending(eventId);
   }
+
+  return { promoted, emailed };
 }
