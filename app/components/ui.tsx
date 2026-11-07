@@ -1296,6 +1296,9 @@ export function MobileEventSummary({ event, showName, hidden }: { event: UIEvent
         maxHeight: hidden ? 0 : 120,
         opacity: hidden ? 0 : 1,
         transition: "max-height 0.22s ease, opacity 0.16s ease",
+        // Wait before revealing after the price panel scrolls away. Hiding stays
+        // immediate, and scrolling back cancels a pending reveal.
+        transitionDelay: hidden ? "0s" : "3s",
       }}
     >
       <div style={{ padding: "7px 16px 8px" }}>
