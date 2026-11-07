@@ -59,6 +59,9 @@ export default function UserPage() {
   const [summaryHidden, setSummaryHidden] = useState(false);
   useEffect(() => {
     if (events.length === 0) return;
+    let hasScrolled = false;
+    let pendingHidden: boolean | null = null;
+    let visibilityTimer: ReturnType<typeof setTimeout> | undefined;
     // Runs straight off the scroll event: a handful of getBoundingClientRect
     // reads is cheap, and rAF throttling (background tab, paused painting) can
     // strand a pending frame and freeze the strip on a stale event.
@@ -73,19 +76,36 @@ export default function UserPage() {
 
       // Not "the panel has appeared" — the panel merely poking in at the bottom
       // of a tall phone screen is still a long scroll away from being read.
-      // The strip folds once the panel crosses the middle of the viewport, and
-      // comes back as soon as it has scrolled up past the header.
+      // Keep the initial summary visible. Once the reader scrolls, delay both
+      // visibility changes by three seconds without restarting on every scroll.
       const panel = current.querySelector<HTMLElement>("[data-cost-panel]");
       const rect = panel?.getBoundingClientRect();
       const panelInFocus = !!rect && rect.bottom > line && rect.top < window.innerHeight / 2;
-      setSummaryHidden((prev) => (prev === panelInFocus ? prev : panelInFocus));
+      if (!hasScrolled) return;
+      if (window.scrollY <= 0) {
+        clearTimeout(visibilityTimer);
+        pendingHidden = null;
+        setSummaryHidden(false);
+        return;
+      }
+      if (pendingHidden === panelInFocus) return;
+      clearTimeout(visibilityTimer);
+      pendingHidden = panelInFocus;
+      visibilityTimer = setTimeout(() => {
+        setSummaryHidden(panelInFocus);
+      }, 3000);
+    };
+    const onScroll = () => {
+      hasScrolled = true;
+      pick();
     };
     const timer = setTimeout(pick, 0);
-    window.addEventListener("scroll", pick, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", pick);
     return () => {
       clearTimeout(timer);
-      window.removeEventListener("scroll", pick);
+      clearTimeout(visibilityTimer);
+      window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", pick);
     };
   }, [events]);
