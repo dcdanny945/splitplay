@@ -3,7 +3,7 @@
 Event registration with automatic cost-splitting and Stripe auto-charge.
 Built with **Next.js 16 + Supabase + Stripe + Gmail (SMTP)**.
 
-Live: https://splitplay-sepia.vercel.app
+Live: https://splitbball-sepia.vercel.app
 
 ## Quick start
 
