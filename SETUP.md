@@ -120,12 +120,12 @@ vercel
 ```
 
 1. 部署後到 **Vercel → 專案 → Settings → Environment Variables**，把 `.env.local` 裡所有變數都加進去
-   （`NEXT_PUBLIC_URL` 改成你的正式網址，例如 `https://splitplay.vercel.app`）
+   （`NEXT_PUBLIC_URL` 改成你的正式網址，例如 `https://splitbball-sepia.vercel.app`）
 2. 到 **Stripe → Developers → Webhooks → Add endpoint**：
-   - URL：`https://你的網址/api/webhook`
+   - URL：`https://splitbball-sepia.vercel.app/api/webhook`
    - 事件：勾 `checkout.session.completed`
    - 複製這裡的 `whsec_...`，更新 Vercel 上的 `STRIPE_WEBHOOK_SECRET`，重新部署
-3. `vercel.json` 已設定 Cron：每 5 分鐘打一次 `/api/cron/settle`，到結算時間的 Split 活動會自動扣款
+3. `vercel.json` 已設定 Cron：每天 11:00 UTC（`0 11 * * *`）打一次 `/api/cron/settle`，到結算時間的 Split 活動會自動扣款
    （Vercel 會自動帶上 `Authorization: Bearer $CRON_SECRET`，所以 `CRON_SECRET` 也要加到 Vercel 環境變數）
 
 ---
@@ -143,3 +143,5 @@ vercel
 - **後台登入**用單一 `ADMIN_PASSWORD` + 簽章 cookie（適合單一主辦者）。要多組管理員再換 Supabase Auth。
 - **使用者自助退出**：因為沒有使用者帳號系統，前台名單只顯示、不開放自助退出；移除參加者由後台操作。
 - **扣款失敗**：標記為 `failed`，後台名單會顯示 FAILED 標籤，可聯絡對方換卡後再處理。
+
+正式網址更換時，請參照 [DEPLOY.md 的檢查清單](./DEPLOY.md#production-domain-change-checklist)，檢查 Vercel、Stripe、Supabase 與 cron-job.org 的外部設定。正式部署前須先取得核准。

@@ -65,4 +65,7 @@ See `.env.local.example`. You'll need:
 
 ## Deployment
 
-See **[DEPLOY.md](./DEPLOY.md)** for the full Vercel + Stripe webhook setup.
+See **[DEPLOY.md](./DEPLOY.md)** for the full Vercel + Stripe webhook setup and the
+[production domain change checklist](./DEPLOY.md#production-domain-change-checklist).
+Production `NEXT_PUBLIC_URL` must be `https://splitbball-sepia.vercel.app` (no trailing slash);
+it controls payment redirects, email links, and social metadata.
