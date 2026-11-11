@@ -1,8 +1,15 @@
 // Shared pricing logic — safe to import from both server and client (no server-only deps).
-// Australian Stripe domestic card fee: 1.7% + A$0.30. The fee is passed on to the
-// participant so the organiser always nets the full activity cost.
-
-export const STRIPE_PCT = 0.017; // 1.7%
+// The fee is passed on to the participant so the organiser always nets the full
+// activity cost.
+//
+// Stripe AU charges 1.7% + A$0.30 on a domestic card but 3.5% + A$0.30 on one
+// issued overseas, and which is which can't be known before charging. Grossing
+// up at the domestic rate left the organiser short whenever someone paid with
+// an overseas card (31/10/2026: sixteen fees of $0.39, two of $0.48, $0.12
+// short on a $90 court). 2.5% is the blend that covers a mix of up to roughly
+// eight overseas cards in eighteen, while costing everyone else about four
+// cents when there are none.
+export const STRIPE_PCT = 0.025;
 export const STRIPE_FIXED = 0.3; // A$0.30
 
 export type Pricing = {
